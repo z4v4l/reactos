@@ -2,8 +2,9 @@
 
 ![ReactOS Logo](https://reactos.org/wiki/images/0/02/ReactOS_logo.png)
 
-[![Release 0.4.6](https://img.shields.io/badge/release-v0.4.6-green.svg)](https://sourceforge.net/projects/reactos/files/ReactOS/0.4.6/)
-[![ReactOS Build Environment](https://img.shields.io/badge/RosBE-v2.1.5-blue.svg)](https://sourceforge.net/projects/reactos/files/RosBE-Windows/i386/2.1.5/)
+[![ReactOS Release 0.4.6](https://img.shields.io/badge/release-0.4.6-brightgreen.svg)](https://sourceforge.net/projects/reactos/files/ReactOS/0.4.6/)
+[![ReactOS Build Environment (Windows)](https://img.shields.io/badge/RosBE_Windows-2.1.5-blue.svg)](https://sourceforge.net/projects/reactos/files/RosBE-Windows/i386/2.1.5/)
+[![ReactOS Build Environment (Unix)](https://img.shields.io/badge/RosBE_Unix-2.1.2-blue.svg)](https://sourceforge.net/projects/reactos/files/RosBE-Unix/2.1.2/)
 
 ## Quick Links
 - [Website](https://reactos.org)
