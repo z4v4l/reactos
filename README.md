@@ -1,7 +1,9 @@
 # ReactOS Project
 
-Current version: __0.4.6__
 ![ReactOS Logo](https://reactos.org/wiki/images/0/02/ReactOS_logo.png)
+
+[![Release 0.4.6](https://img.shields.io/badge/release-v0.4.6-green.svg)](https://sourceforge.net/projects/reactos/files/ReactOS/0.4.6/)
+[![ReactOS Build Environment](https://img.shields.io/badge/RosBE-v2.1.5-blue.svg)](https://sourceforge.net/projects/reactos/files/RosBE-Windows/i386/2.1.5/)
 
 ## Quick Links
 - [Website](https://reactos.org)
