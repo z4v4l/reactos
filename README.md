@@ -3,8 +3,11 @@
 ![ReactOS Logo](https://reactos.org/wiki/images/0/02/ReactOS_logo.png)
 
 [![License](https://img.shields.io/badge/license-GNU_GPL_2.0+-blue.svg)](https://spdx.org/licenses/GPL-2.0+.html)
-[![Travis-CI Build Status](https://travis-ci.org/reactos/reactos.svg?branch=master)](https://travis-ci.org/reactos/reactos)
 [![ReactOS Release 0.4.6](https://img.shields.io/badge/release_on_SourceForge-0.4.6-brightgreen.svg)](https://sourceforge.net/projects/reactos/files/ReactOS/0.4.6/)
+
+
+[![Travis-CI Build Status](https://travis-ci.org/reactos/reactos.svg?branch=master)](https://travis-ci.org/reactos/reactos)
+[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/reactos/reactos?branch=master&svg=true)](https://ci.appveyor.com/project/AmineKhaldi/reactos)
 [![Coverity](https://scan.coverity.com/projects/205/badge.svg?flat=1)](https://scan.coverity.com/projects/205)
 [![GitHub Commits from dev](https://img.shields.io/github/commits-since/reactos/reactos/0.4.7-dev.svg)]()
 
