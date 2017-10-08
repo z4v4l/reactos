@@ -1,5 +1,8 @@
 language: bash
 
+git:
+  depth: 1
+
 before_script:
 - wget https://www.dropbox.com/s/xp73aeet6mym2ol/RosBEBinFull.tar.gz?dl=1 -O RosBE.tar.gz
 - tar -xzf RosBE.tar.gz
