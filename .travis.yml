@@ -6,5 +6,5 @@ git:
 before_script:
 - wget https://www.dropbox.com/s/xp73aeet6mym2ol/RosBEBinFull.tar.gz?dl=1 -O RosBE.tar.gz
 - tar -xzf RosBE.tar.gz
-- echo 'mkdir ../Build && cd ../Build && $TRAVIS_BUILD_DIR/configure.sh -DENABLE_ROSTESTS=1 && cd reactos && ninja bootcd' > tmp_file
+- echo 'mkdir ../Build && cd ../Build && $TRAVIS_BUILD_DIR/configure.sh -DENABLE_ROSTESTS=1 && cd reactos && ninja && ninja bootcd' > tmp_file
 - ./RosBEBinFull/RosBE.sh < tmp_file
