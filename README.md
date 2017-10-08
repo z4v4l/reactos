@@ -1,11 +1,10 @@
-# ReactOS Project
+# ReactOS Project 
 
 ![ReactOS Logo](https://reactos.org/wiki/images/0/02/ReactOS_logo.png)
 
 [![License](https://img.shields.io/badge/license-GNU_GPL_2.0+-blue.svg)](https://spdx.org/licenses/GPL-2.0+.html)
+[![Travis-CI Build Status](https://travis-ci.org/reactos/reactos.svg?branch=master)](https://travis-ci.org/reactos/reactos)
 [![ReactOS Release 0.4.6](https://img.shields.io/badge/release_on_SourceForge-0.4.6-brightgreen.svg)](https://sourceforge.net/projects/reactos/files/ReactOS/0.4.6/)
-[![ReactOS Build Environment (Windows)](https://img.shields.io/badge/RosBE_Windows-2.1.5-blue.svg)](https://sourceforge.net/projects/reactos/files/RosBE-Windows/i386/2.1.5/)
-[![ReactOS Build Environment (Unix)](https://img.shields.io/badge/RosBE_Unix-2.1.2-blue.svg)](https://sourceforge.net/projects/reactos/files/RosBE-Unix/2.1.2/)
 [![Coverity](https://scan.coverity.com/projects/205/badge.svg?flat=1)](https://scan.coverity.com/projects/205)
 [![GitHub Commits from dev](https://img.shields.io/github/commits-since/reactos/reactos/0.4.7-dev.svg)]()
 
@@ -29,7 +28,8 @@ Windows Vista and future Windows NT releases.
 
 The code of ReactOS is licensed under [GNU GPL 2.0+](https://spdx.org/licenses/GPL-2.0+.html).
 
-## Building
+## Building 
+[![ReactOS Build Environment (Windows)](https://img.shields.io/badge/RosBE_Windows-2.1.5-blue.svg)](https://sourceforge.net/projects/reactos/files/RosBE-Windows/i386/2.1.5/) [![ReactOS Build Environment (Unix)](https://img.shields.io/badge/RosBE_Unix-2.1.2-blue.svg)](https://sourceforge.net/projects/reactos/files/RosBE-Unix/2.1.2/)
 
 To build the system it is strongly advised to use the _ReactOS Build Environment
 (RosBE)._ Up-to-date versions for Windows and for Unix/GNU-Linux are available
