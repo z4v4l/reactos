@@ -19,18 +19,12 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#define WIN32_NO_STATUS
-#define _INC_WINDOWS
-#define COM_NO_WINDOWS_H
-
 #include <stdio.h>
-#include <windef.h>
-#include <winbase.h>
-#include <winreg.h>
-#include <objbase.h>
+#include <stdarg.h>
+#include <windows.h>
 #include <advpub.h>
 #include <assert.h>
-#include <wine/test.h>
+#include "wine/test.h"
 
 /* defines for the TranslateInfString/Ex tests */
 #define TEST_STRING1 "\\Application Name"
@@ -140,8 +134,8 @@ static void delnode_test(void)
 
     /* Native DelNode apparently does not support relative paths, so we use
        absolute paths for testing */
-    currDirLen = GetCurrentDirectoryA(sizeof(currDir) / sizeof(CHAR), currDir);
-    assert(currDirLen > 0 && currDirLen < sizeof(currDir) / sizeof(CHAR));
+    currDirLen = GetCurrentDirectoryA(ARRAY_SIZE(currDir), currDir);
+    assert(currDirLen > 0 && currDirLen < ARRAY_SIZE(currDir));
 
     if(currDir[currDirLen - 1] == '\\')
         currDir[--currDirLen] = 0;
@@ -195,14 +189,14 @@ static void delnode_test(void)
     ok (hr == S_OK, "DelNode failed deleting a directory containing multiple files\n");
 }
 
-static void append_str(char **str, const char *data, ...)
+static void WINAPIV append_str(char **str, const char *data, ...)
 {
-    va_list valist;
+    __ms_va_list valist;
 
-    va_start(valist, data);
+    __ms_va_start(valist, data);
     vsprintf(*str, data, valist);
     *str += strlen(*str);
-    va_end(valist);
+    __ms_va_end(valist);
 }
 
 static void create_inf_file(void)

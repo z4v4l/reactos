@@ -30,13 +30,6 @@ GetCharacterRect(IN UINT uFontRow, IN UINT uFontColumn, OUT LPRECT CharacterRect
     CharacterRect->bottom = CharacterRect->top + CHARACTER_BOX_HEIGHT;
 }
 
-__inline VOID
-GetCharacterPosition(IN UINT uCharacter, OUT PUINT uFontRow, OUT PUINT uFontColumn)
-{
-    *uFontRow = uCharacter / 16;
-    *uFontColumn = uCharacter % 16;
-}
-
 static INT
 FontBoxesHitTest(IN UINT xPos, IN UINT yPos, OUT LPRECT CharacterRect)
 {
@@ -249,7 +242,7 @@ FontBoxesWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     PFONT_WND_INFO Info;
 
-    Info = (PFONT_WND_INFO) GetWindowLongW(hwnd, GWLP_USERDATA);
+    Info = (PFONT_WND_INFO) GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 
     if(Info || uMsg == WM_CREATE)
     {
@@ -257,7 +250,7 @@ FontBoxesWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         {
             case WM_CREATE:
                 Info = (PFONT_WND_INFO)( ( (LPCREATESTRUCT)lParam )->lpCreateParams );
-                SetWindowLongW(hwnd, GWLP_USERDATA, (LONG)Info);
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)Info);
 
                 // Set a fixed window size
                 SetWindowPos(hwnd, NULL, 0, 0, FONT_BOXES_WND_WIDTH, FONT_BOXES_WND_HEIGHT, SWP_NOZORDER | SWP_NOMOVE);
@@ -265,7 +258,7 @@ FontBoxesWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 return 0;
 
             case WM_DESTROY:
-                SetWindowLongW(hwnd, GWLP_USERDATA, 0);
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 return 0;
 
             case WM_KEYDOWN:

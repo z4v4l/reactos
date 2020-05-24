@@ -5,16 +5,7 @@
  * PROGRAMMER:      Thomas Faber <thomas.faber@reactos.org>
  */
 
-#include <apitest.h>
-
-#define WIN32_NO_STATUS
-#define _INC_WINDOWS
-#define COM_NO_WINDOWS_H
-#include <stdarg.h>
-#include <windef.h>
-#include <winbase.h>
-#include <ws2tcpip.h>
-#include <ndk/umtypes.h>
+#include "ws2_32.h"
 
 #define ok_addrinfo(ai, flags, family, socktype, protocol, addrlen) do  \
 {                                                                       \
@@ -22,7 +13,7 @@
     ok_dec((ai)->ai_family, family);                                    \
     ok_dec((ai)->ai_socktype, socktype);                                \
     ok_dec((ai)->ai_protocol, protocol);                                \
-    ok_dec((ai)->ai_addrlen, addrlen);                                  \
+    ok_dec((int)(ai)->ai_addrlen, addrlen);                             \
 } while (0)
 
 #define ok_sockaddr_in(sockaddr, family, port, addr) do                 \
@@ -208,7 +199,9 @@ START_TEST(getaddrinfo)
     WSADATA WsaData;
     int Error;
     PADDRINFOA AddrInfo;
+    PADDRINFOW AddrInfoW;
     ADDRINFOA Hints;
+    ADDRINFOW HintsW;
     CHAR LocalHostName[128];
     struct hostent *Hostent;
 
@@ -225,6 +218,9 @@ START_TEST(getaddrinfo)
     EndSeh(STATUS_SUCCESS);
 
     Error = getaddrinfo("127.0.0.1", "80", NULL, &AddrInfo);
+    ok_dec(Error, WSANOTINITIALISED);
+
+    Error = GetAddrInfoW(L"127.0.0.1", L"80", NULL, &AddrInfoW);
     ok_dec(Error, WSANOTINITIALISED);
 
     Error = WSAStartup(MAKEWORD(2, 2), &WsaData);
@@ -248,7 +244,7 @@ START_TEST(getaddrinfo)
        "Could not determine local address. Following test results may be wrong.\n");
 
     ZeroMemory(&Hints, sizeof(Hints));
-    /* parameter tests */
+    /* parameter tests for getaddrinfo */
     StartSeh() getaddrinfo(NULL, NULL, NULL, NULL); EndSeh(STATUS_ACCESS_VIOLATION);
     StartSeh() getaddrinfo("", "", &Hints, NULL);   EndSeh(STATUS_ACCESS_VIOLATION);
     StartSeh()
@@ -257,6 +253,17 @@ START_TEST(getaddrinfo)
         ok_dec(Error, WSAHOST_NOT_FOUND);
         ok_dec(WSAGetLastError(), WSAHOST_NOT_FOUND);
         ok_ptr(AddrInfo, NULL);
+    EndSeh(STATUS_SUCCESS);
+
+    /* parameter tests for GetAddrInfoW */
+    StartSeh() GetAddrInfoW(NULL, NULL, NULL, NULL);  EndSeh(STATUS_ACCESS_VIOLATION);
+    StartSeh() GetAddrInfoW(L"", L"", &HintsW, NULL); EndSeh(STATUS_ACCESS_VIOLATION);
+    StartSeh()
+        AddrInfo = InvalidPointer;
+        Error = GetAddrInfoW(NULL, NULL, NULL, &AddrInfoW);
+        ok_dec(Error, WSAHOST_NOT_FOUND);
+        ok_dec(WSAGetLastError(), WSAHOST_NOT_FOUND);
+        ok_ptr(AddrInfo, InvalidPointer); /* differs from getaddrinfo */
     EndSeh(STATUS_SUCCESS);
 
     TestNodeName();
@@ -270,5 +277,8 @@ START_TEST(getaddrinfo)
 
     /* not initialized anymore */
     Error = getaddrinfo("127.0.0.1", "80", NULL, &AddrInfo);
+    ok_dec(Error, WSANOTINITIALISED);
+
+    Error = GetAddrInfoW(L"127.0.0.1", L"80", NULL, &AddrInfoW);
     ok_dec(Error, WSANOTINITIALISED);
 }

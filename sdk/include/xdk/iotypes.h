@@ -219,6 +219,7 @@ $if (_NTDDK_)
 $endif (_NTDDK_)
 $if (_WDMDDK_)
 /* DEVICE_OBJECT.Flags */
+#define DO_UNLOAD_PENDING                 0x00000001
 #define DO_VERIFY_VOLUME                  0x00000002
 #define DO_BUFFERED_IO                    0x00000004
 #define DO_EXCLUSIVE                      0x00000008
@@ -1271,6 +1272,11 @@ typedef enum _FILE_INFORMATION_CLASS {
 #endif
   FileMaximumInformation
 } FILE_INFORMATION_CLASS, *PFILE_INFORMATION_CLASS;
+
+typedef enum _DIRECTORY_NOTIFY_INFORMATION_CLASS {
+  DirectoryNotifyInformation = 1,
+  DirectoryNotifyExtendedInformation
+} DIRECTORY_NOTIFY_INFORMATION_CLASS, *PDIRECTORY_NOTIFY_INFORMATION_CLASS;
 
 typedef struct _FILE_POSITION_INFORMATION {
   LARGE_INTEGER CurrentByteOffset;
@@ -2741,9 +2747,10 @@ typedef struct _ACPI_INTERFACE_STANDARD2 {
   PUNREGISTER_FOR_DEVICE_NOTIFICATIONS2 UnregisterForDeviceNotifications;
 } ACPI_INTERFACE_STANDARD2, *PACPI_INTERFACE_STANDARD2;
 
-#if !defined(_AMD64_) && !defined(_IA64_)
+#if !defined(_AMD64_) && !defined(_ARM_)
 #include <pshpack4.h>
 #endif
+
 typedef struct _IO_STACK_LOCATION {
   UCHAR MajorFunction;
   UCHAR MinorFunction;
@@ -2758,6 +2765,20 @@ typedef struct _IO_STACK_LOCATION {
       ULONG POINTER_ALIGNMENT EaLength;
     } Create;
     struct {
+      struct _IO_SECURITY_CONTEXT *SecurityContext;
+      ULONG Options;
+      USHORT POINTER_ALIGNMENT Reserved;
+      USHORT ShareAccess;
+      struct _NAMED_PIPE_CREATE_PARAMETERS *Parameters;
+    } CreatePipe;
+    struct {
+      PIO_SECURITY_CONTEXT SecurityContext;
+      ULONG Options;
+      USHORT POINTER_ALIGNMENT Reserved;
+      USHORT ShareAccess;
+      struct _MAILSLOT_CREATE_PARAMETERS *Parameters;
+    } CreateMailslot;
+    struct {
       ULONG Length;
       ULONG POINTER_ALIGNMENT Key;
       LARGE_INTEGER ByteOffset;
@@ -2771,12 +2792,17 @@ typedef struct _IO_STACK_LOCATION {
       ULONG Length;
       PUNICODE_STRING FileName;
       FILE_INFORMATION_CLASS FileInformationClass;
-      ULONG FileIndex;
+      ULONG POINTER_ALIGNMENT FileIndex;
     } QueryDirectory;
     struct {
       ULONG Length;
-      ULONG CompletionFilter;
+      ULONG POINTER_ALIGNMENT CompletionFilter;
     } NotifyDirectory;
+    struct {
+      ULONG Length;
+      ULONG POINTER_ALIGNMENT CompletionFilter;
+      DIRECTORY_NOTIFY_INFORMATION_CLASS POINTER_ALIGNMENT DirectoryNotifyInformationClass;
+    } NotifyDirectoryEx;
     struct {
       ULONG Length;
       FILE_INFORMATION_CLASS POINTER_ALIGNMENT FileInformationClass;
@@ -2798,7 +2824,7 @@ typedef struct _IO_STACK_LOCATION {
       ULONG Length;
       PVOID EaList;
       ULONG EaListLength;
-      ULONG EaIndex;
+      ULONG POINTER_ALIGNMENT EaIndex;
     } QueryEa;
     struct {
       ULONG Length;
@@ -2809,17 +2835,17 @@ typedef struct _IO_STACK_LOCATION {
     } QueryVolume;
     struct {
       ULONG Length;
-      FS_INFORMATION_CLASS FsInformationClass;
+      FS_INFORMATION_CLASS POINTER_ALIGNMENT FsInformationClass;
     } SetVolume;
     struct {
       ULONG OutputBufferLength;
-      ULONG InputBufferLength;
-      ULONG FsControlCode;
+      ULONG POINTER_ALIGNMENT InputBufferLength;
+      ULONG POINTER_ALIGNMENT FsControlCode;
       PVOID Type3InputBuffer;
     } FileSystemControl;
     struct {
       PLARGE_INTEGER Length;
-      ULONG Key;
+      ULONG POINTER_ALIGNMENT Key;
       LARGE_INTEGER ByteOffset;
     } LockControl;
     struct {
@@ -2900,7 +2926,12 @@ typedef struct _IO_STACK_LOCATION {
       PPOWER_SEQUENCE PowerSequence;
     } PowerSequence;
     struct {
-      ULONG SystemContext;
+      union {
+        ULONG SystemContext;
+#if (NTDDI_VERSION >= NTDDI_VISTA)
+        SYSTEM_POWER_STATE_CONTEXT SystemPowerStateContext;
+#endif // (NTDDI_VERSION >= NTDDI_VISTA)
+      };
       POWER_STATE_TYPE POINTER_ALIGNMENT Type;
       POWER_STATE POINTER_ALIGNMENT State;
       POWER_ACTION POINTER_ALIGNMENT ShutdownType;
@@ -2927,9 +2958,11 @@ typedef struct _IO_STACK_LOCATION {
   PIO_COMPLETION_ROUTINE CompletionRoutine;
   PVOID Context;
 } IO_STACK_LOCATION, *PIO_STACK_LOCATION;
-#if !defined(_AMD64_) && !defined(_IA64_)
-#include <poppack.h>
+
+#if !defined(_AMD64_) && !defined(_ARM_)
+#include "poppack.h"
 #endif
+
 
 /* IO_STACK_LOCATION.Control */
 

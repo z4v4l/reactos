@@ -20,6 +20,8 @@
 
 #include "d3drm_private.h"
 
+WINE_DEFAULT_DEBUG_CHANNEL(d3drm);
+
 static inline struct d3drm_face *impl_from_IDirect3DRMFace(IDirect3DRMFace *iface)
 {
     return CONTAINING_RECORD(iface, struct d3drm_face, IDirect3DRMFace_iface);
@@ -77,7 +79,7 @@ static ULONG WINAPI d3drm_face1_Release(IDirect3DRMFace *iface)
     if (!refcount)
     {
         d3drm_object_cleanup((IDirect3DRMObject *)iface, &face->obj);
-        HeapFree(GetProcessHeap(), 0, face);
+        heap_free(face);
     }
 
     return refcount;
@@ -622,7 +624,7 @@ HRESULT d3drm_face_create(struct d3drm_face **face)
 
     TRACE("face %p.\n", face);
 
-    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
+    if (!(object = heap_alloc_zero(sizeof(*object))))
         return E_OUTOFMEMORY;
 
     object->IDirect3DRMFace_iface.lpVtbl = &d3drm_face1_vtbl;

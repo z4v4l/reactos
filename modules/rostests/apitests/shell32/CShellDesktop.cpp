@@ -7,15 +7,10 @@
  */
 
 #include "shelltest.h"
-#include <atlbase.h>
-#include <atlcom.h>
-#include <strsafe.h>
+
 #include <ndk/rtlfuncs.h>
-
-#define NDEBUG
-#include <debug.h>
+#include <stdio.h>
 #include <shellutils.h>
-
 
 // We would normally use S_LESSTHAN and S_GREATERTHAN, but w2k3 returns numbers like 3 and -3...
 // So instead we check on the sign bit (compare result is the low word of the hresult).
@@ -151,7 +146,7 @@ TestCompareIDList(IShellFolder* psf)
 
 static
 VOID
-TestShellFolder(
+TestDesktopFolder(
     _In_ IShellFolder2 *psf2)
 {
     HRESULT hr;
@@ -210,7 +205,7 @@ VOID TestInitialize(_In_ IShellFolder *psf)
     //hr = ppf2->GetCurFolder(NULL);
     //ok(hr == E_INVALIDARG, "hr = %lx\n", hr);
 
-    LPITEMIDLIST pidl;
+    CComHeapPtr<ITEMIDLIST> pidl;
     hr = ppf2->GetCurFolder(&pidl);
     ok(hr == S_OK, "hr = %lx\n", hr);
     ok(pidl->mkid.cb == 0, "expected empty pidl got cb = %x\n", pidl->mkid.cb);
@@ -249,7 +244,7 @@ START_TEST(CShellDesktop)
     ok(hr == S_OK, "hr = %lx\n", hr);
     ok(psf == static_cast<IShellFolder *>(psf2), "Expected %p == %p\n", static_cast<PVOID>(psf), static_cast<PVOID>(psf2));
 
-    TestShellFolder(psf2);
+    TestDesktopFolder(psf2);
     TestCompareIDList(psf);
     TestInitialize(psf);
 }

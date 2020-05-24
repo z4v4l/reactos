@@ -1288,7 +1288,7 @@ NtGdiStretchDIBitsInternal(
                                BitmapFormat(pbmi->bmiHeader.biBitCount,
                                             pbmi->bmiHeader.biCompression),
                                pbmi->bmiHeader.biHeight < 0 ? BMF_TOPDOWN : 0,
-                               pbmi->bmiHeader.biSizeImage,
+                               cjMaxBits,
                                pvBits,
                                0);
 
@@ -1814,7 +1814,7 @@ DIB_CreateDIBSection(
         if (mapBits) bm.bmBits = (char *)mapBits + (offset - mapOffset);
     }
     else if (ovr_pitch && offset)
-        bm.bmBits = (LPVOID) offset;
+        bm.bmBits = UlongToPtr(offset);
     else
     {
         offset = 0;

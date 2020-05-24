@@ -4,6 +4,7 @@
  * FILE:             win32ss/reactx/ntddraw/dxeng.c
  * PURPOSE:          Implementation of DxEng functions
  * PROGRAMMERS:      Magnus Olsen (magnus@greatlord.com)
+ *                   Oleg Dubinskiy (oleg.dubinskij2013@yandex.ua)
  */
 
 #include <win32k.h>
@@ -357,7 +358,7 @@ DxEngGetHdevData(HDEV hDev,
         break;
       case DxEGShDevData_ldev:
         DPRINT1("requested DXEGSHDEVDATA DxEGShDevData_ldev\n");
-        retVal = (DWORD) PDev->pldev;
+        retVal = (DWORD_PTR) PDev->pldev;
         break;
       case DxEGShDevData_GDev:
         DPRINT1("requested DXEGSHDEVDATA DxEGShDevData_GDev\n");
@@ -442,7 +443,7 @@ DxEngSetHdevData(HDEV hDev,
 * Return one of the type values
 *
 * @remarks.
-* We do not have type 2 implemented yet
+* none
 *
 *--*/
 DWORD_PTR
@@ -463,7 +464,8 @@ DxEngGetDCState(HDC hDC,
                 retVal = (DWORD_PTR) pDC->fs & DC_FLAG_FULLSCREEN;
                 break;
             case 2:
-                UNIMPLEMENTED;
+                /* Return the number of rectangles in the visible region. */
+                retVal = (DWORD_PTR) pDC->prgnRao ? pDC->prgnRao->rdh.nCount : pDC->prgnVis->rdh.nCount;
                 break;
             case 3:
             {

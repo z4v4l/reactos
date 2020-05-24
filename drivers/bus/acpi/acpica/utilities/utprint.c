@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2017, Intel Corp.
+ * Copyright (C) 2000 - 2020, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -452,7 +452,13 @@ vsnprintf (
 
 
     Pos = String;
-    End = String + Size;
+
+
+    if (Size != ACPI_UINT32_MAX) {
+        End = String + Size;
+    } else {
+        End = ACPI_CAST_PTR(char, ACPI_UINT32_MAX);
+    }
 
     for (; *Format; ++Format)
     {
@@ -616,6 +622,7 @@ vsnprintf (
         case 'X':
 
             Type |= ACPI_FORMAT_UPPER;
+            /* FALLTHROUGH */
 
         case 'x':
 

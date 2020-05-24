@@ -43,13 +43,18 @@ static UCHAR DbgChannels[DBG_CHANNELS_COUNT];
 ULONG DebugPort = RS232;
 
 /* Serial debug connection */
-ULONG ComPort  = 0; // The COM port initializer chooses the first available port starting from COM4 down to COM1.
+#if defined(SARCH_PC98)
+ULONG BaudRate = 9600;
+#else
 ULONG BaudRate = 115200;
+#endif
+
+ULONG ComPort  = 0; // The COM port initializer chooses the first available port starting from COM4 down to COM1.
 ULONG PortIrq  = 0; // Not used at the moment.
 
 BOOLEAN DebugStartOfLine = TRUE;
 
-VOID DebugInit(BOOLEAN MainInit)
+VOID DebugInit(IN ULONG_PTR FrLdrSectionId)
 {
     PCHAR CommandLine, PortString, BaudString, IrqString;
     ULONG Value;
@@ -78,7 +83,7 @@ VOID DebugInit(BOOLEAN MainInit)
 #endif
 
     /* Check for pre- or main initialization phase */
-    if (!MainInit)
+    if (FrLdrSectionId == 0)
     {
         /* Pre-initialization phase: use the FreeLdr command-line debugging string */
         CommandLine = (PCHAR)CmdLineGetDebugString();
@@ -92,14 +97,10 @@ VOID DebugInit(BOOLEAN MainInit)
     else
     {
         /* Main initialization phase: use the FreeLdr INI debugging string */
-
-        ULONG_PTR SectionId;
-
-        if (!IniOpenSection("FreeLoader", &SectionId))
+        if (!IniReadSettingByName(FrLdrSectionId, "Debug", DebugString, sizeof(DebugString)))
+        {
             return;
-
-        if (!IniReadSettingByName(SectionId, "Debug", DebugString, sizeof(DebugString)))
-            return;
+        }
     }
 
     /* Get the Command Line */
@@ -326,6 +327,12 @@ DebugDumpBuffer(ULONG Mask, PVOID Buffer, ULONG Length)
     }
 }
 
+VOID
+DebugDisableScreenPort(VOID)
+{
+    DebugPort &= ~SCREEN;
+}
+
 static BOOLEAN
 DbgAddDebugChannel(CHAR* channel, CHAR* level, CHAR op)
 {
@@ -454,7 +461,7 @@ MsgBoxPrint(const char *Format, ...)
     return 0;
 }
 
-// DECLSPEC_NORETURN
+DECLSPEC_NORETURN
 VOID
 NTAPI
 KeBugCheckEx(
@@ -465,9 +472,15 @@ KeBugCheckEx(
     IN ULONG_PTR  BugCheckParameter4)
 {
     char Buffer[70];
-    sprintf(Buffer, "*** STOP: 0x%08lX (0x%08lX, 0x%08lX, 0x%08lX, 0x%08lX)",
-            BugCheckCode, BugCheckParameter1, BugCheckParameter2,
-            BugCheckParameter3, BugCheckParameter4);
+
+    sprintf(Buffer,
+            "*** STOP: 0x%08lX (0x%p,0x%p,0x%p,0x%p)",
+            BugCheckCode,
+            (PVOID)BugCheckParameter1,
+            (PVOID)BugCheckParameter2,
+            (PVOID)BugCheckParameter3,
+            (PVOID)BugCheckParameter4);
+
     UiMessageBoxCritical(Buffer);
     ASSERT(FALSE);
     for (;;);
@@ -482,7 +495,7 @@ RtlAssert(IN PVOID FailedAssertion,
 {
     if (Message)
     {
-        DbgPrint("Assertion \'%s\' failed at %s line %u: %s\n",
+        DbgPrint("Assertion \'%s\' failed at %s line %lu: %s\n",
                  (PCHAR)FailedAssertion,
                  (PCHAR)FileName,
                  LineNumber,
@@ -490,7 +503,7 @@ RtlAssert(IN PVOID FailedAssertion,
     }
     else
     {
-        DbgPrint("Assertion \'%s\' failed at %s line %u\n",
+        DbgPrint("Assertion \'%s\' failed at %s line %lu\n",
                  (PCHAR)FailedAssertion,
                  (PCHAR)FileName,
                  LineNumber);

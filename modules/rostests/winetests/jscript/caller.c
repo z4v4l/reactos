@@ -16,24 +16,17 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#define WIN32_NO_STATUS
-#define _INC_WINDOWS
-#define COM_NO_WINDOWS_H
-
 #include <stdio.h>
 
 #define COBJMACROS
 #define CONST_VTABLE
 
-#include <windef.h>
-#include <winbase.h>
-#include <winnls.h>
 #include <ole2.h>
 #include <dispex.h>
 #include <activscp.h>
 #include <objsafe.h>
 
-#include <wine/test.h>
+#include "wine/test.h"
 
 #ifdef _WIN64
 
@@ -142,6 +135,9 @@ static void test_change_type(IVariantChangeType *change_type, VARIANT *src, cons
 
     call_change_type(change_type, &v, src, VT_I4);
     ok(V_I4(&v) == ex->int_result, "V_I4(v) = %d, expected %d\n", V_I4(&v), ex->int_result);
+
+    call_change_type(change_type, &v, src, VT_UI2);
+    ok(V_UI2(&v) == (UINT16)ex->int_result, "V_UI2(v) = %u, expected %u\n", V_UI2(&v), (UINT16)ex->int_result);
 
     call_change_type(change_type, &v, src, VT_BSTR);
     ok(!strcmp_wa(V_BSTR(&v), ex->str_result), "V_BSTR(v) = %s, expected %s\n", wine_dbgstr_w(V_BSTR(&v)), ex->str_result);

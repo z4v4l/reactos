@@ -39,17 +39,6 @@ SHFindComputer(LPCITEMIDLIST pidl1, LPCITEMIDLIST pidl2)
 /*
  * Unimplemented
  */
-EXTERN_C HRESULT
-WINAPI
-SHLimitInputEdit(HWND hWnd, IShellFolder *psf)
-{
-    FIXME("SHLimitInputEdit() stub\n");
-    return S_FALSE;
-}
-
-/*
- * Unimplemented
- */
 EXTERN_C BOOL
 WINAPI
 SHLimitInputCombo(HWND hWnd, LPVOID lpUnknown)
@@ -67,20 +56,6 @@ PathIsEqualOrSubFolder(LPWSTR lpFolder, LPWSTR lpSubFolder)
 {
     FIXME("PathIsEqualOrSubFolder() stub\n");
     return FALSE;
-}
-
-/*
- * Unimplemented
- */
-EXTERN_C HRESULT
-WINAPI
-SHCreateFileExtractIconW(LPCWSTR pszPath,
-                         DWORD dwFileAttributes,
-                         REFIID riid,
-                         void **ppv)
-{
-    FIXME("SHCreateFileExtractIconW() stub\n");
-    return E_FAIL;
 }
 
 EXTERN_C HRESULT
@@ -196,9 +171,12 @@ EXTERN_C BOOL
 WINAPI
 MakeShellURLFromPathA(LPCSTR lpPath, LPSTR lpUrl, INT cchMax)
 {
-    FIXME("MakeShellURLFromPathA() stub\n");
-    lpUrl = NULL;
-    return FALSE;
+    WCHAR szPath[MAX_PATH], szURL[MAX_PATH];
+    BOOL ret;
+    SHAnsiToUnicode(lpPath, szPath, _countof(szPath));
+    ret = MakeShellURLFromPathW(szPath, szURL, _countof(szURL));
+    SHUnicodeToAnsi(szURL, lpUrl, cchMax);
+    return ret;
 }
 
 /*
@@ -475,8 +453,12 @@ EXTERN_C BOOL
 WINAPI
 SheShortenPathA(LPSTR lpPath, BOOL bShorten)
 {
-    FIXME("SheShortenPathA() stub\n");
-    return FALSE;
+    BOOL ret;
+    WCHAR szPath[MAX_PATH];
+    MultiByteToWideChar(CP_ACP, 0, lpPath, -1, szPath, _countof(szPath));
+    ret = SheShortenPathW(szPath, bShorten);
+    WideCharToMultiByte(CP_ACP, 0, szPath, -1, lpPath, MAX_PATH, NULL, NULL);
+    return ret;
 }
 
 /*
@@ -654,17 +636,6 @@ SHChangeNotifySuspendResume(BOOL bSuspend,
                             DWORD dwReserved)
 {
     FIXME("SHChangeNotifySuspendResume() stub\n");
-    return FALSE;
-}
-
-/*
- * Unimplemented
- */
-EXTERN_C BOOL
-WINAPI
-RegenerateUserEnvironment(LPVOID *lpUnknown, BOOL bUnknown)
-{
-    FIXME("RegenerateUserEnvironment() stub\n");
     return FALSE;
 }
 
@@ -1339,17 +1310,6 @@ SHGetProcessDword(DWORD dwUnknown1, DWORD dwUnknown2)
     /* Unimplemented in WinXP SP3 */
     TRACE("SHGetProcessDword() stub\n");
     return 0;
-}
-
-/*
- * Unimplemented
- */
-EXTERN_C BOOL
-WINAPI
-SHTestTokenMembership(HANDLE TokenHandle, ULONG SidToCheck)
-{
-    FIXME("SHTestTokenMembership() stub\n");
-    return FALSE;
 }
 
 /*

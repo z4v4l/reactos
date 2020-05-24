@@ -183,7 +183,7 @@ ExCompareExchangeCallBack(IN OUT PEX_CALLBACK CallBack,
                                            MAX_FAST_REFS + 1))
         {
             /* This should never happen */
-            ASSERTMSG("Callback block is already undergoing rundown", FALSE);
+            ASSERTMSG("Callback block is already undergoing rundown\n", FALSE);
             return FALSE;
         }
     }
@@ -250,8 +250,8 @@ ExpDeleteCallback(IN PVOID Object)
  * @remarks None
  *
  *--*/
-BOOLEAN
 INIT_FUNCTION
+BOOLEAN
 NTAPI
 ExpInitializeCallbacks(VOID)
 {

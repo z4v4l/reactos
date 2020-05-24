@@ -3,13 +3,14 @@
  * LICENSE:     GPL - See COPYING in the top level directory
  * FILE:        base/applications/mscutils/servman/mainwnd.c
  * PURPOSE:     Main window message handler
- * COPYRIGHT:   Copyright 2006-20015 Ged Murphy <gedmurphy@reactos.org>
+ * COPYRIGHT:   Copyright 2006-2017 Ged Murphy <gedmurphy@reactos.org>
  *
  */
 
 #include "precomp.h"
 
 #include <windowsx.h>
+#include <shellapi.h>
 
 static const WCHAR szMainWndClass[] = L"ServManWndClass";
 
@@ -23,7 +24,7 @@ static const TBBUTTON Buttons [] =
     /* Note: First item for a separator is its width in pixels */
     {15, 0, TBSTATE_ENABLED, BTNS_SEP, {0}, 0, 0},                                  /* separator */
 
-    {TBICON_CREATE,  ID_CREATE,  TBSTATE_INDETERMINATE, BTNS_BUTTON, {0}, 0, 0 },         /* create */
+    {TBICON_CREATE,  ID_CREATE,  TBSTATE_INDETERMINATE, BTNS_BUTTON, {0}, 0, 0 },   /* create */
     {TBICON_DELETE,  ID_DELETE,  TBSTATE_INDETERMINATE, BTNS_BUTTON, {0}, 0, 0 },   /* delete */
 
     {15, 0, TBSTATE_ENABLED, BTNS_SEP, {0}, 0, 0},                                  /* separator */
@@ -306,7 +307,7 @@ pCreateToolbar(PMAIN_WND_INFO Info)
 static BOOL
 CreateStatusBar(PMAIN_WND_INFO Info)
 {
-    INT StatWidths[] = {110, -1}; /* widths of status bar */
+    INT StatWidths[] = {130, -1}; /* widths of status bar */
 
     Info->hStatus = CreateWindowEx(0,
                                    STATUSCLASSNAME,
@@ -374,13 +375,16 @@ InitMainWnd(PMAIN_WND_INFO Info)
     return TRUE;
 }
 
-
 static VOID
 MainWndCommand(PMAIN_WND_INFO Info,
                WORD CmdId,
                HWND hControl)
 {
     UNREFERENCED_PARAMETER(hControl);
+
+    WCHAR szAppName[256];
+    WCHAR szAppAuthors[256];    
+    HICON hIcon;
 
     switch (CmdId)
     {
@@ -590,11 +594,12 @@ MainWndCommand(PMAIN_WND_INFO Info,
         break;
 
         case ID_ABOUT:
-            DialogBox(hInstance,
-                      MAKEINTRESOURCE(IDD_ABOUTBOX),
-                      Info->hMainWnd,
-                      AboutDialogProc);
-            SetFocus(Info->hListView);
+            LoadStringW(hInstance, IDS_APPNAME, szAppName, _countof(szAppName));
+            LoadStringW(hInstance, IDS_APPAUTHORS, szAppAuthors, _countof(szAppAuthors));
+            
+            hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_SM_ICON));
+            ShellAboutW(Info->hMainWnd, szAppName, szAppAuthors, hIcon);
+            DestroyIcon(hIcon);
         break;
 
     }

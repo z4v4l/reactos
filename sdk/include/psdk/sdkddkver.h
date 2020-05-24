@@ -117,6 +117,10 @@ Abstract:
 #define NTDDI_WIN10_TH2                     0x0A000001
 #define NTDDI_WIN10_RS1                     0x0A000002
 #define NTDDI_WIN10_RS2                     0x0A000003
+#define NTDDI_WIN10_RS3                     0x0A000004
+#define NTDDI_WIN10_RS4                     0x0A000005
+#define NTDDI_WIN10_RS5                     0x0A000006
+#define NTDDI_WIN10_19H1                    0x0A000007
 
 /* Version Fields in NTDDI_VERSION */
 #define OSVERSION_MASK                      0xFFFF0000UL
@@ -129,8 +133,12 @@ Abstract:
 #define SUBVER(Version)                     (((Version) & SUBVERSION_MASK))
 
 /* Macros to get the NTDDI for a given WIN32 */
+#if (_WIN32_WINNT == _WIN32_WINNT_WS03)
+#define NTDDI_VERSION_FROM_WIN32_WINNT(Version) NTDDI_WS03SP1
+#else
 #define NTDDI_VERSION_FROM_WIN32_WINNT2(Version) Version##0000
 #define NTDDI_VERSION_FROM_WIN32_WINNT(Version)  NTDDI_VERSION_FROM_WIN32_WINNT2(Version)
+#endif
 
 /* Select Default _WIN32_WINNT Value */
 #if !defined(_WIN32_WINNT) && !defined(_CHICAGO_)

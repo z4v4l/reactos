@@ -46,18 +46,22 @@ GENERIC_MAPPING ObpSymbolicLinkMapping =
 PDEVICE_MAP ObSystemDeviceMap = NULL;
 ULONG ObpTraceLevel = 0;
 
+INIT_FUNCTION
 VOID
 NTAPI
 PsInitializeQuotaSystem(VOID);
 
 ULONG ObpInitializationPhase;
 
+ULONG ObpObjectSecurityMode = 0;
+ULONG ObpProtectionMode = 0;
+
 /* PRIVATE FUNCTIONS *********************************************************/
 
 static
+INIT_FUNCTION
 NTSTATUS
 NTAPI
-INIT_FUNCTION
 ObpCreateKernelObjectsSD(OUT PSECURITY_DESCRIPTOR *SecurityDescriptor)
 {
     PSECURITY_DESCRIPTOR Sd = NULL;
@@ -126,8 +130,8 @@ done:
     return Status;
 }
 
-BOOLEAN
 INIT_FUNCTION
+BOOLEAN
 NTAPI
 ObInit2(VOID)
 {
@@ -193,8 +197,8 @@ ObInit2(VOID)
     return TRUE;
 }
 
-BOOLEAN
 INIT_FUNCTION
+BOOLEAN
 NTAPI
 ObInitSystem(VOID)
 {
@@ -282,8 +286,8 @@ ObInitSystem(VOID)
     ObjectTypeInitializer.GenericMapping = ObpDirectoryMapping;
     ObjectTypeInitializer.DeleteProcedure = NULL;
     ObjectTypeInitializer.DefaultNonPagedPoolCharge = sizeof(OBJECT_DIRECTORY);
-    ObCreateObjectType(&Name, &ObjectTypeInitializer, NULL, &ObDirectoryType);
-    ObDirectoryType->TypeInfo.ValidAccessMask &= ~SYNCHRONIZE;
+    ObCreateObjectType(&Name, &ObjectTypeInitializer, NULL, &ObpDirectoryObjectType);
+    ObpDirectoryObjectType->TypeInfo.ValidAccessMask &= ~SYNCHRONIZE;
 
     /* Create 'symbolic link' object type */
     RtlInitUnicodeString(&Name, L"SymbolicLink");
@@ -292,8 +296,8 @@ ObInitSystem(VOID)
     ObjectTypeInitializer.ValidAccessMask = SYMBOLIC_LINK_ALL_ACCESS;
     ObjectTypeInitializer.ParseProcedure = ObpParseSymbolicLink;
     ObjectTypeInitializer.DeleteProcedure = ObpDeleteSymbolicLink;
-    ObCreateObjectType(&Name, &ObjectTypeInitializer, NULL, &ObSymbolicLinkType);
-    ObSymbolicLinkType->TypeInfo.ValidAccessMask &= ~SYNCHRONIZE;
+    ObCreateObjectType(&Name, &ObjectTypeInitializer, NULL, &ObpSymbolicLinkObjectType);
+    ObpSymbolicLinkObjectType->TypeInfo.ValidAccessMask &= ~SYNCHRONIZE;
 
     /* Phase 0 initialization complete */
     ObpInitializationPhase++;
@@ -321,7 +325,7 @@ ObPostPhase0:
     /* Get a handle to it */
     Status = ObReferenceObjectByHandle(Handle,
                                        0,
-                                       ObDirectoryType,
+                                       ObpDirectoryObjectType,
                                        KernelMode,
                                        (PVOID*)&ObpRootDirectoryObject,
                                        NULL);
@@ -372,7 +376,7 @@ ObPostPhase0:
     /* Get a handle to it */
     Status = ObReferenceObjectByHandle(Handle,
                                        0,
-                                       ObDirectoryType,
+                                       ObpDirectoryObjectType,
                                        KernelMode,
                                        (PVOID*)&ObpTypeDirectoryObject,
                                        NULL);

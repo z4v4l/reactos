@@ -5,11 +5,7 @@
  * PROGRAMMER:      Pierre Schweitzer <pierre.schweitzer@reactos.org>
  */
 
-#include <apitest.h>
-
-#define WIN32_NO_STATUS
-#include <stdio.h>
-#include <ndk/rtlfuncs.h>
+#include "precomp.h"
 
 static
 void
@@ -21,7 +17,7 @@ Test_VeryLongTests(void)
     CHAR OldDir[MAX_PATH];
     FILETIME FileTime, File1Time;
 
-    win_skip("Too long, see: ROSTESTS-177");
+    win_skip("Too long, see: ROSTESTS-177\n");
     return;
 
     /* Create a blank test directory */
@@ -180,6 +176,7 @@ Test_LongTests(void)
     ok(GetFileTime(hFile, &File1Time, NULL, NULL) != FALSE, "GetFileTime() failed\n");
     CloseHandle(hFile);
 
+    ros_skip_flaky
     ok(RtlCompareMemory(&FileTime, &File1Time, sizeof(FILETIME)) == sizeof(FILETIME), "Tunnel cache failed\n");
 
     DeleteFile("file2");

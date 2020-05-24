@@ -20,17 +20,6 @@ ULONG LdrpNormalSnap;
 
 /* FUNCTIONS *****************************************************************/
 
-VOID
-NTAPI
-AVrfPageHeapDllNotification(IN PLDR_DATA_TABLE_ENTRY LdrEntry)
-{
-    /* Check if page heap dll notification is turned on */
-    if (!(RtlpDphGlobalFlags & DPH_FLAG_DLL_NOTIFY))
-        return;
-
-    /* We don't support this flag currently */
-    UNIMPLEMENTED;
-}
 
 NTSTATUS
 NTAPI
@@ -795,10 +784,9 @@ LdrpWalkImportDescriptor(IN LPWSTR DllPath OPTIONAL,
             }
 
             /* Check if Application Verifier was enabled */
-            if (Peb->NtGlobalFlag & FLG_HEAP_ENABLE_TAIL_CHECK)
+            if (Peb->NtGlobalFlag & FLG_APPLICATION_VERIFIER)
             {
-                /* FIXME */
-                DPRINT1("We don't support Application Verifier yet!\n");
+                AVrfDllLoadNotification(LdrEntry);
             }
 
             /* Just to be safe */
@@ -815,7 +803,6 @@ LdrpWalkImportDescriptor(IN LPWSTR DllPath OPTIONAL,
     return Status;
 }
 
-/* FIXME: This function is missing SxS support */
 NTSTATUS
 NTAPI
 LdrpLoadImportModule(IN PWSTR DllPath OPTIONAL,
@@ -831,8 +818,13 @@ LdrpLoadImportModule(IN PWSTR DllPath OPTIONAL,
     NTSTATUS Status;
     PPEB Peb = RtlGetCurrentPeb();
     PTEB Teb = NtCurrentTeb();
+    UNICODE_STRING RedirectedImpDescName;
+    BOOLEAN RedirectedDll;
 
     DPRINT("LdrpLoadImportModule('%S' '%s' %p %p)\n", DllPath, ImportName, DataTableEntry, Existing);
+
+    RedirectedDll = FALSE;
+    RtlInitEmptyUnicodeString(&RedirectedImpDescName, NULL, 0);
 
     /* Convert import descriptor name to unicode string */
     ImpDescName = &Teb->StaticUnicodeString;
@@ -883,65 +875,45 @@ LdrpLoadImportModule(IN PWSTR DllPath OPTIONAL,
                                              &LdrApiDefaultExtension);
     }
 
+    /* Check if the SxS Assemblies specify another file */
+    Status = RtlDosApplyFileIsolationRedirection_Ustr(TRUE,
+                                                      ImpDescName,
+                                                      &LdrApiDefaultExtension,
+                                                      NULL,
+                                                      &RedirectedImpDescName,
+                                                      &ImpDescName,
+                                                      NULL,
+                                                      NULL,
+                                                      NULL);
+
+    /* Check success */
+    if (NT_SUCCESS(Status))
+    {
+        /* Let Ldrp know */
+        RedirectedDll = TRUE;
+    }
+    else if (Status != STATUS_SXS_KEY_NOT_FOUND)
+    {
+        /* Unrecoverable SxS failure */
+        DPRINT1("LDR: RtlDosApplyFileIsolationRedirection_Ustr failed  with status %x for dll %wZ\n", Status, ImpDescName);
+        goto done;
+    }
+
     /* Check if it's loaded */
     if (LdrpCheckForLoadedDll(DllPath,
                               ImpDescName,
                               TRUE,
-                              FALSE,
+                              RedirectedDll,
                               DataTableEntry))
     {
         /* It's already existing in the list */
         *Existing = TRUE;
-        return STATUS_SUCCESS;
+        Status = STATUS_SUCCESS;
+        goto done;
     }
 
     /* We're loading it for the first time */
     *Existing = FALSE;
-
-#if 0
-    /* Load manifest */
-    {
-        ACTCTX_SECTION_KEYED_DATA data;
-        NTSTATUS status;
-
-        //DPRINT1("find_actctx_dll for %S\n", fullname);
-        //RtlInitUnicodeString(&nameW, libname);
-        data.cbSize = sizeof(data);
-        status = RtlFindActivationContextSectionString(
-                    FIND_ACTCTX_SECTION_KEY_RETURN_HACTCTX, NULL,
-                    ACTIVATION_CONTEXT_SECTION_DLL_REDIRECTION,
-                    ImpDescName,
-                    &data);
-        //if (status != STATUS_SUCCESS) return status;
-        DPRINT1("Status: 0x%08X\n", status);
-
-        if (NT_SUCCESS(status))
-        {
-            ACTIVATION_CONTEXT_ASSEMBLY_DETAILED_INFORMATION *info;
-            SIZE_T needed, size = 1024;
-
-            for (;;)
-            {
-                if (!(info = RtlAllocateHeap(RtlGetProcessHeap(), 0, size)))
-                {
-                    status = STATUS_NO_MEMORY;
-                    goto done;
-                }
-                status = RtlQueryInformationActivationContext(0, data.hActCtx, &data.ulAssemblyRosterIndex,
-                    AssemblyDetailedInformationInActivationContext,
-                    info, size, &needed);
-                if (status == STATUS_SUCCESS) break;
-                if (status != STATUS_BUFFER_TOO_SMALL) goto done;
-                RtlFreeHeap(RtlGetProcessHeap(), 0, info);
-                size = needed;
-            }
-
-            DPRINT("manifestpath === %S\n", info->lpAssemblyManifestPath);
-            DPRINT("DirectoryName === %S\n", info->lpAssemblyDirectoryName);
-        }
-    }
-done:
-#endif
 
     /* Map it */
     Status = LdrpMapDll(DllPath,
@@ -949,10 +921,13 @@ done:
                         ImpDescName->Buffer,
                         NULL,
                         TRUE,
-                        FALSE,
+                        RedirectedDll,
                         DataTableEntry);
-
-    if (!NT_SUCCESS(Status)) return Status;
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("LDR: LdrpMapDll failed  with status %x for dll %wZ\n", Status, ImpDescName);
+        goto done;
+    }
 
     /* Walk its import descriptor table */
     Status = LdrpWalkImportDescriptor(DllPath,
@@ -964,6 +939,9 @@ done:
                        &(*DataTableEntry)->InInitializationOrderLinks);
     }
 
+done:
+    RtlFreeUnicodeString(&RedirectedImpDescName);
+
     return Status;
 }
 
@@ -973,7 +951,7 @@ LdrpSnapThunk(IN PVOID ExportBase,
               IN PVOID ImportBase,
               IN PIMAGE_THUNK_DATA OriginalThunk,
               IN OUT PIMAGE_THUNK_DATA Thunk,
-              IN PIMAGE_EXPORT_DIRECTORY ExportEntry,
+              IN PIMAGE_EXPORT_DIRECTORY ExportDirectory,
               IN ULONG ExportSize,
               IN BOOLEAN Static,
               IN LPSTR DllName)
@@ -984,7 +962,7 @@ LdrpSnapThunk(IN PVOID ExportBase,
     PIMAGE_IMPORT_BY_NAME AddressOfData;
     PULONG NameTable;
     PUSHORT OrdinalTable;
-    LPSTR ImportName = NULL;
+    LPSTR ImportName = NULL, DotPosition;
     USHORT Hint;
     NTSTATUS Status;
     ULONG_PTR HardErrorParameters[3];
@@ -1004,7 +982,7 @@ LdrpSnapThunk(IN PVOID ExportBase,
     {
         /* Get the ordinal number, and its normalized version */
         OriginalOrdinal = IMAGE_ORDINAL(OriginalThunk->u1.Ordinal);
-        Ordinal = (USHORT)(OriginalOrdinal - ExportEntry->Base);
+        Ordinal = (USHORT)(OriginalOrdinal - ExportDirectory->Base);
     }
     else
     {
@@ -1018,15 +996,15 @@ LdrpSnapThunk(IN PVOID ExportBase,
 
         /* Now get the VA of the Name and Ordinal Tables */
         NameTable = (PULONG)((ULONG_PTR)ExportBase +
-                             (ULONG_PTR)ExportEntry->AddressOfNames);
+                             (ULONG_PTR)ExportDirectory->AddressOfNames);
         OrdinalTable = (PUSHORT)((ULONG_PTR)ExportBase +
-                                 (ULONG_PTR)ExportEntry->AddressOfNameOrdinals);
+                                 (ULONG_PTR)ExportDirectory->AddressOfNameOrdinals);
 
         /* Get the hint */
         Hint = AddressOfData->Hint;
 
         /* Try to get a match by using the hint */
-        if (((ULONG)Hint < ExportEntry->NumberOfNames) &&
+        if (((ULONG)Hint < ExportDirectory->NumberOfNames) &&
              (!strcmp(ImportName, ((LPSTR)((ULONG_PTR)ExportBase + NameTable[Hint])))))
         {
             /* We got a match, get the Ordinal from the hint */
@@ -1036,7 +1014,7 @@ LdrpSnapThunk(IN PVOID ExportBase,
         {
             /* Well bummer, hint didn't work, do it the long way */
             Ordinal = LdrpNameToOrdinal(ImportName,
-                                        ExportEntry->NumberOfNames,
+                                        ExportDirectory->NumberOfNames,
                                         ExportBase,
                                         NameTable,
                                         OrdinalTable);
@@ -1044,20 +1022,31 @@ LdrpSnapThunk(IN PVOID ExportBase,
     }
 
     /* Check if the ordinal is invalid */
-    if ((ULONG)Ordinal >= ExportEntry->NumberOfFunctions)
+    if ((ULONG)Ordinal >= ExportDirectory->NumberOfFunctions)
     {
 FailurePath:
         /* Is this a static snap? */
         if (Static)
         {
+            UNICODE_STRING SnapTarget;
+            PLDR_DATA_TABLE_ENTRY LdrEntry;
+
+            /* What was the module we were searching in */
+            RtlInitAnsiString(&TempString, DllName ? DllName : "Unknown");
+
+            /* What was the module we were searching for */
+            if (LdrpCheckForLoadedDllHandle(ImportBase, &LdrEntry))
+                SnapTarget = LdrEntry->BaseDllName;
+            else
+                RtlInitUnicodeString(&SnapTarget, L"Unknown");
+
             /* Inform the debug log */
             if (IsOrdinal)
-                DPRINT1("Failed to snap ordinal 0x%x\n", OriginalOrdinal);
+                DPRINT1("Failed to snap ordinal %Z!0x%x for %wZ\n", &TempString, OriginalOrdinal, &SnapTarget);
             else
-                DPRINT1("Failed to snap %s\n", ImportName);
+                DPRINT1("Failed to snap %Z!%s for %wZ\n", &TempString, ImportName, &SnapTarget);
 
             /* These are critical errors. Setup a string for the DLL name */
-            RtlInitAnsiString(&TempString, DllName ? DllName : "Unknown");
             RtlAnsiStringToUnicodeString(&HardErrorDllName, &TempString, TRUE);
 
             /* Set it as the parameter */
@@ -1128,19 +1117,25 @@ FailurePath:
         /* The ordinal seems correct, get the AddressOfFunctions VA */
         AddressOfFunctions = (PULONG)
                              ((ULONG_PTR)ExportBase +
-                              (ULONG_PTR)ExportEntry->AddressOfFunctions);
+                              (ULONG_PTR)ExportDirectory->AddressOfFunctions);
 
         /* Write the function pointer*/
         Thunk->u1.Function = (ULONG_PTR)ExportBase + AddressOfFunctions[Ordinal];
 
         /* Make sure it's within the exports */
-        if ((Thunk->u1.Function > (ULONG_PTR)ExportEntry) &&
-            (Thunk->u1.Function < ((ULONG_PTR)ExportEntry + ExportSize)))
+        if ((Thunk->u1.Function > (ULONG_PTR)ExportDirectory) &&
+            (Thunk->u1.Function < ((ULONG_PTR)ExportDirectory + ExportSize)))
         {
             /* Get the Import and Forwarder Names */
             ImportName = (LPSTR)Thunk->u1.Function;
+
+            DotPosition = strchr(ImportName, '.');
+            ASSERT(DotPosition != NULL);
+            if (!DotPosition)
+                goto FailurePath;
+
             ForwarderName.Buffer = ImportName;
-            ForwarderName.Length = (USHORT)(strchr(ImportName, '.') - ImportName);
+            ForwarderName.Length = (USHORT)(DotPosition - ImportName);
             ForwarderName.MaximumLength = ForwarderName.Length;
             Status = RtlAnsiStringToUnicodeString(&TempUString,
                                                   &ForwarderName,
@@ -1149,13 +1144,44 @@ FailurePath:
             /* Make sure the conversion was OK */
             if (NT_SUCCESS(Status))
             {
-                /* Load the forwarder, free the temp string */
-                Status = LdrpLoadDll(FALSE,
+                WCHAR StringBuffer[MAX_PATH];
+                UNICODE_STRING StaticString, *RedirectedImportName;
+                BOOLEAN Redirected = FALSE;
+
+                RtlInitEmptyUnicodeString(&StaticString, StringBuffer, sizeof(StringBuffer));
+
+                /* Check if the SxS Assemblies specify another file */
+                Status = RtlDosApplyFileIsolationRedirection_Ustr(TRUE,
+                                                                  &TempUString,
+                                                                  &LdrApiDefaultExtension,
+                                                                  &StaticString,
+                                                                  NULL,
+                                                                  &RedirectedImportName,
+                                                                  NULL,
+                                                                  NULL,
+                                                                  NULL);
+                if (NT_SUCCESS(Status))
+                {
+                    if (ShowSnaps)
+                    {
+                        DPRINT1("LDR: %Z got redirected to %wZ\n", &ForwarderName, RedirectedImportName);
+                    }
+                    /* Let Ldrp know */
+                    Redirected = TRUE;
+                }
+                else
+                {
+                    RedirectedImportName = &TempUString;
+                }
+
+                /* Load the forwarder */
+                Status = LdrpLoadDll(Redirected,
                                      NULL,
                                      NULL,
-                                     &TempUString,
+                                     RedirectedImportName,
                                      &ForwarderHandle,
                                      FALSE);
+
                 RtlFreeUnicodeString(&TempUString);
             }
 
@@ -1184,6 +1210,7 @@ FailurePath:
             {
                 /* Import by name */
                 ForwardName = &ForwarderName;
+                ForwardOrdinal = 0;
             }
 
             /* Get the pointer */

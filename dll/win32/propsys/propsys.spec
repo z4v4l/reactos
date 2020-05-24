@@ -30,7 +30,7 @@
 @ stdcall -private DllUnregisterServer()
 @ stub InitPropVariantFromBooleanVector
 @ stdcall InitPropVariantFromBuffer(ptr long ptr)
-@ stub InitPropVariantFromCLSID
+@ stdcall InitPropVariantFromCLSID(ptr ptr)
 @ stub InitPropVariantFromDoubleVector
 @ stub InitPropVariantFromFileTime
 @ stub InitPropVariantFromFileTimeVector
@@ -66,7 +66,7 @@
 @ stub PSCoerceToCanonicalValue
 @ stub PSCreateAdapterFromPropertyStore
 @ stub PSCreateDelayedMultiplexPropertyStore
-@ stub PSCreateMemoryPropertyStore
+@ stdcall PSCreateMemoryPropertyStore(ptr ptr)
 @ stub PSCreateMultiplexPropertyStore
 @ stub PSCreatePropertyChangeArray
 @ stub PSCreatePropertyStoreFromObject
@@ -84,7 +84,7 @@
 @ stub PSGetPropertyDescriptionByName
 @ stdcall PSGetPropertyDescriptionListFromString(wstr ptr ptr)
 @ stub PSGetPropertyFromPropertyStorage
-@ stub PSGetPropertyKeyFromName
+@ stdcall PSGetPropertyKeyFromName(wstr ptr)
 @ stdcall PSGetPropertySystem(ptr ptr)
 @ stub PSGetPropertyValue
 @ stub PSLookupPropertyHandlerCLSID
@@ -108,12 +108,12 @@
 @ stub PropVariantGetUInt32Elem
 @ stub PropVariantGetUInt64Elem
 @ stub PropVariantToBSTR
-@ stub PropVariantToBoolean
+@ stdcall PropVariantToBoolean(ptr ptr)
 @ stub PropVariantToBooleanVector
 @ stub PropVariantToBooleanVectorAlloc
 @ stub PropVariantToBooleanWithDefault
-@ stub PropVariantToBuffer
-@ stub PropVariantToDouble
+@ stdcall PropVariantToBuffer(ptr ptr long)
+@ stdcall PropVariantToDouble(ptr ptr)
 @ stub PropVariantToDoubleVector
 @ stub PropVariantToDoubleVectorAlloc
 @ stub PropVariantToDoubleWithDefault
@@ -134,11 +134,11 @@
 @ stub PropVariantToInt64VectorAlloc
 @ stub PropVariantToInt64WithDefault
 @ stub PropVariantToStrRet
-@ stub PropVariantToString
+@ stdcall PropVariantToString(ptr ptr long)
 @ stdcall PropVariantToStringAlloc(ptr ptr)
 @ stub PropVariantToStringVector
 @ stub PropVariantToStringVectorAlloc
-@ stub PropVariantToStringWithDefault
+@ stdcall PropVariantToStringWithDefault(ptr wstr)
 @ stdcall PropVariantToUInt16(ptr ptr)
 @ stub PropVariantToUInt16Vector
 @ stub PropVariantToUInt16VectorAlloc

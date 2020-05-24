@@ -57,7 +57,7 @@ BEGIN
     END
 END
 
-IDD_SETTINGS_DIALOG DIALOGEX 0, 0, 250, 215
+IDD_SETTINGS_DIALOG DIALOGEX 0, 0, 250, 265
 STYLE DS_SHELLFONT | DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
 CAPTION "Nastavenia"
 FONT 8, "MS Shell Dlg"
@@ -71,16 +71,20 @@ BEGIN
     EDITTEXT IDC_DOWNLOAD_DIR_EDIT, 15, 86, 166, 12, WS_CHILD | WS_VISIBLE | WS_GROUP | ES_AUTOHSCROLL
     PUSHBUTTON "&Vybrať", IDC_CHOOSE, 187, 85, 50, 14
     AUTOCHECKBOX "&Zmazať inštalačné programy po nainštalovaní", IDC_DEL_AFTER_INSTALL, 16, 100, 218, 12
-    GROUPBOX "Proxy", -1, 4, 116, 240, 76
-    CONTROL "System proxy settings", IDC_PROXY_DEFAULT, "Button", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 15, 130, 210, 10
-    CONTROL "Direct (No proxy)", IDC_NO_PROXY, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 15, 145, 210, 10
-    CONTROL "Proxy", IDC_USE_PROXY, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 15, 160, 74, 10
-    EDITTEXT IDC_PROXY_SERVER, 90, 160, 147, 12, ES_AUTOHSCROLL | WS_DISABLED
-    LTEXT "No proxy for", -1, 27, 175, 64, 10
-    EDITTEXT IDC_NO_PROXY_FOR, 90, 175, 147, 12, ES_AUTOHSCROLL | WS_DISABLED
-    PUSHBUTTON "Predvolené", IDC_DEFAULT_SETTINGS, 8, 195, 60, 14
-    PUSHBUTTON "OK", IDOK, 116, 195, 60, 14
-    PUSHBUTTON "Zrušiť", IDCANCEL, 181, 195, 60, 14
+    GROUPBOX "Software source", -1, 4, 118, 240, 46
+    CONTROL "Use default", IDC_SOURCE_DEFAULT, "Button", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 15, 132, 74, 10
+    CONTROL "Specified source", IDC_USE_SOURCE, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 15, 147, 74, 10
+    EDITTEXT IDC_SOURCE_URL, 97, 147, 140, 12, ES_AUTOHSCROLL | WS_DISABLED
+    GROUPBOX "Proxy", -1, 4, 166, 240, 76
+    CONTROL "System proxy settings", IDC_PROXY_DEFAULT, "Button", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 15, 180, 210, 10
+    CONTROL "Direct (No proxy)", IDC_NO_PROXY, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 15, 195, 210, 10
+    CONTROL "Proxy", IDC_USE_PROXY, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 15, 210, 74, 10
+    EDITTEXT IDC_PROXY_SERVER, 90, 210, 147, 12, ES_AUTOHSCROLL | WS_DISABLED
+    LTEXT "No proxy for", -1, 27, 225, 64, 10
+    EDITTEXT IDC_NO_PROXY_FOR, 90, 225, 147, 12, ES_AUTOHSCROLL | WS_DISABLED
+    PUSHBUTTON "Predvolené", IDC_DEFAULT_SETTINGS, 8, 245, 60, 14
+    DEFPUSHBUTTON "OK", IDOK, 116, 245, 60, 14
+    PUSHBUTTON "Zrušiť", IDCANCEL, 181, 245, 60, 14
 END
 
 IDD_INSTALL_DIALOG DIALOGEX 0, 0, 216, 97
@@ -88,31 +92,21 @@ STYLE DS_SHELLFONT | DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYS
 CAPTION "Inštalácia programu"
 FONT 8, "MS Shell Dlg"
 BEGIN
-    LTEXT "...", IDC_INSTALL_TEXT, 4, 5, 209, 35
+    LTEXT "…", IDC_INSTALL_TEXT, 4, 5, 209, 35
     AUTORADIOBUTTON "&Inštalovať z disku (CD alebo DVD)", IDC_CD_INSTALL, 10, 46, 197, 11, WS_GROUP
     AUTORADIOBUTTON "&Stiahnuť a inštalovať", IDC_DOWNLOAD_INSTALL, 10, 59, 197, 11, NOT WS_TABSTOP
-    PUSHBUTTON "OK", IDOK, 86, 78, 60, 14
+    DEFPUSHBUTTON "OK", IDOK, 86, 78, 60, 14
     PUSHBUTTON "Zrušiť", IDCANCEL, 150, 78, 60, 14
 END
 
 IDD_DOWNLOAD_DIALOG DIALOGEX 0, 0, 220, 72
 STYLE DS_SHELLFONT | DS_CENTER | WS_BORDER | WS_CAPTION | WS_POPUP | WS_SYSMENU | WS_VISIBLE
-CAPTION "Sťahujem %ls..." // Stiahnuť ???
+CAPTION "Sťahujem %ls…" // Stiahnuť ???
 FONT 8, "MS Shell Dlg"
 BEGIN
     CONTROL "Progress1", IDC_DOWNLOAD_PROGRESS, "msctls_progress32", WS_BORDER | PBS_SMOOTH, 10, 10, 200, 12
     EDITTEXT IDC_DOWNLOAD_STATUS, 10, 28, 200, 22, ES_CENTER | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_DISABLED | NOT WS_BORDER
     PUSHBUTTON "Zrušiť", IDCANCEL, 85, 53, 50, 15, WS_GROUP | WS_TABSTOP
-END
-
-IDD_ABOUT_DIALOG DIALOGEX 22, 16, 190, 66
-STYLE DS_SHELLFONT | WS_BORDER | WS_DLGFRAME | WS_SYSMENU | DS_MODALFRAME
-CAPTION "Čo je Manažér aplikácií systému ReactOS"
-FONT 8, "MS Shell Dlg"
-BEGIN
-    LTEXT "Manažér aplikácií systému ReactOS\nAutorské práva (C) 2009\nod Dmitry Chapyshev (dmitry@reactos.org)\nPreklad: Mário Kačmár (kario@szm.sk)", IDC_STATIC, 48, 7, 130, 39
-    PUSHBUTTON "Zavrieť", IDOK, 133, 46, 50, 14
-    ICON IDI_MAIN, IDC_STATIC, 10, 10, 7, 30
 END
 
 STRINGTABLE
@@ -183,38 +177,44 @@ BEGIN
     IDS_CAT_SCIENCE "Vedecké" // Science
     IDS_CAT_TOOLS "Nástroje" // Tools
     IDS_CAT_VIDEO "Video"
+    IDS_CAT_THEMES "Themes"
 END
 
 STRINGTABLE
 BEGIN
     IDS_APPTITLE "Manažér aplikácií systému ReactOS"
-    IDS_SEARCH_TEXT "Hľadať..."
+    IDS_APP_AUTHORS "Copyright 2009 Dmitry Chapyshev"
+    IDS_SEARCH_TEXT "Hľadať…"
     IDS_INSTALL "Inštalovať"
     IDS_UNINSTALL "Odinštalovať"
     IDS_MODIFY "Zmeniť"
     IDS_APPS_COUNT "Počet programov: %d; Selected: %d"
     IDS_WELCOME_TITLE "Víta Vás Manažér aplikácií systému ReactOS!\n\n" // ReactOS Application Manager
     IDS_WELCOME_TEXT "Vyberte si kategóriu na ľavej strane, potom vyberte aplikáciu, ktorú chcete nainštalovať alebo odinštalovať.\nWebstránka projektu ReactOS: "
-    IDS_WELCOME_URL "http://www.reactos.org"
+    IDS_WELCOME_URL "https://reactos.org/"
     IDS_INSTALLED "Nainštalované"
     IDS_AVAILABLEFORINST "Dostupné pre nainštalovanie"
     IDS_UPDATES "Aktualizácie"
     IDS_APPLICATIONS "Aplikácie"
     IDS_CHOOSE_FOLDER_TEXT "Vyberte priečinok, ktorý sa použije pre sťahovanie programov:"
     IDS_CHOOSE_FOLDER_ERROR "Zvolili ste si neexistujúci priečinok!"
+    IDS_URL_INVALID "The URL you have specified is invalid or not supported. Please correct it!"
     IDS_APP_REG_REMOVE "Naozaj chcete vymazať údaje o nainštalovanom programe z registrov?"
     IDS_INFORMATION "Informácie"
     IDS_UNABLE_TO_DOWNLOAD "Unable to download the package! Address not found!"
     IDS_UNABLE_TO_DOWNLOAD2 "Unable to download the package! Check Internet Connection!"
     IDS_UNABLE_TO_REMOVE "Nie je možné odstrániť z registrov údaje o programe!"
     IDS_UNABLE_TO_INSTALL "Unable to open installer!"
-    IDS_CERT_DOES_NOT_MATCH "SSL certificate verification failed."
-    IDS_INTEG_CHECK_TITLE "Verifying package integrity..."
+    IDS_UNABLE_TO_QUERY_CERT "Unable to retrieve certificate info.\n\nDo you want to continue anyway?"
+    IDS_INTEG_CHECK_TITLE "Verifying package integrity…"
     IDS_INTEG_CHECK_FAIL "The package did not pass the integrity check, it may have been corrupted or tampered with during downloading. Running the software is not recommended."
     IDS_INTERRUPTED_DOWNLOAD "The download was interrupted. Check connection to Internet."
     IDS_UNABLE_TO_WRITE "Unable to write to disk. Disk may be at capacity."
     IDS_SELECT_ALL "Select/Deselect All"
     IDS_INSTALL_SELECTED "Install Selected"
+    IDS_SELECTEDFORINST "Selected for installation"
+    IDS_MISMATCH_CERT_INFO "The certificate used is unknown:\nSubject: %s\nIssuer: %s\nDo you want to continue anyway?"
+    IDS_UNABLE_PATH "Incorrect path format."
 END
 
 STRINGTABLE
@@ -249,5 +249,6 @@ END
 STRINGTABLE
 BEGIN
     IDS_DL_DIALOG_DB_DISP "Applications Database"
-    IDS_DL_DIALOG_DB_DOWNLOAD_DISP "Updating Database..."
+    IDS_DL_DIALOG_DB_DOWNLOAD_DISP "Updating Database…"
+    IDS_DL_DIALOG_DB_UNOFFICIAL_DOWNLOAD_DISP "Updating Database… (Unofficial source)"
 END

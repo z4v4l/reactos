@@ -6,6 +6,8 @@
  * PROGRAMMERS: Benedikt Freisen
  */
 
+#pragma once
+
 class ImageModel
 {
 private:
@@ -19,8 +21,6 @@ private:
     int undoSteps;
     int redoSteps;
 public:
-    BOOL imageSaved;
-
     ImageModel();
     void CopyPrevious(void);
     void Undo(void);

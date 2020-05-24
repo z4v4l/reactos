@@ -69,19 +69,9 @@ static BOOL GetNextElement(TCHAR **pStart, TCHAR **pEnd)
 }
 
 /* Execute a single instance of a FOR command */
-static INT RunInstance(PARSED_COMMAND *Cmd)
-{
-    if (bEcho && !bDisableBatchEcho && Cmd->Subcommands->Type != C_QUIET)
-    {
-        if (!bIgnoreEcho)
-            ConOutChar(_T('\n'));
-        PrintPrompt();
-        EchoCommand(Cmd->Subcommands);
-        ConOutChar(_T('\n'));
-    }
-    /* Just run the command (variable expansion is done in DoDelayedExpansion) */
-    return ExecuteCommand(Cmd->Subcommands);
-}
+/* Just run the command (variable expansion is done in DoDelayedExpansion) */
+#define RunInstance(Cmd) \
+    ExecuteCommandWithEcho((Cmd)->Subcommands)
 
 /* Check if this FOR should be terminated early */
 static BOOL Exiting(PARSED_COMMAND *Cmd)
@@ -96,9 +86,13 @@ static LPTSTR ReadFileContents(FILE *InputFile, TCHAR *Buffer)
 {
     SIZE_T Len = 0;
     SIZE_T AllocLen = 1000;
+
     LPTSTR Contents = cmd_alloc(AllocLen * sizeof(TCHAR));
     if (!Contents)
+    {
+        WARN("Cannot allocate memory for Contents!\n");
         return NULL;
+    }
 
     while (_fgetts(Buffer, CMDLINE_LENGTH, InputFile))
     {
@@ -109,6 +103,7 @@ static LPTSTR ReadFileContents(FILE *InputFile, TCHAR *Buffer)
             Contents = cmd_realloc(Contents, (AllocLen *= 2) * sizeof(TCHAR));
             if (!Contents)
             {
+                WARN("Cannot reallocate memory for Contents!\n");
                 cmd_free(OldContents);
                 return NULL;
             }
@@ -454,7 +449,7 @@ static INT ForRecursive(PARSED_COMMAND *Cmd, LPTSTR List, TCHAR *Buffer, TCHAR *
     return Ret;
 }
 
-BOOL
+INT
 ExecuteFor(PARSED_COMMAND *Cmd)
 {
     TCHAR Buffer[CMDLINE_LENGTH]; /* Buffer to hold the variable value */
@@ -470,6 +465,7 @@ ExecuteFor(PARSED_COMMAND *Cmd)
     lpNew = cmd_alloc(sizeof(FOR_CONTEXT));
     if (!lpNew)
     {
+        WARN("Cannot allocate memory for lpNew!\n");
         cmd_free(List);
         return 1;
     }

@@ -20,16 +20,12 @@
 
 #include <stdarg.h>
 
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x500 /* For NTSTATUS */
-#endif
-
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winbase.h"
 #include "winnt.h"
 #include "winreg.h"
-
 #include "wine/winternl.h"
+
 #include "wine/test.h"

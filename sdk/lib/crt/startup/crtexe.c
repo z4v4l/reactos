@@ -20,6 +20,13 @@
 #include <tchar.h>
 #include <sect_attribs.h>
 #include <locale.h>
+#ifdef _MBCS
+#include <mbstring.h>
+#endif
+
+/* Special handling for ARM & ARM64, __winitenv & __initenv aren't present there. */
+
+#if !defined(__arm__) && !defined(__aarch64__)
 
 #ifndef __winitenv
 extern wchar_t *** __MINGW_IMP_SYMBOL(__winitenv);
@@ -29,6 +36,8 @@ extern wchar_t *** __MINGW_IMP_SYMBOL(__winitenv);
 #ifndef __initenv
 extern char *** __MINGW_IMP_SYMBOL(__initenv);
 #define __initenv (* __MINGW_IMP_SYMBOL(__initenv))
+#endif
+
 #endif
 
 /* Hack, for bug in ld.  Will be removed soon.  */
@@ -128,10 +137,11 @@ pre_c_init (void)
     {
       __setusermatherr (_matherr);
     }
-
+#ifndef __clang__ /* FIXME: CORE-14042 */
   if (__globallocalestatus == -1)
     {
     }
+#endif
   return 0;
 }
 
@@ -302,12 +312,16 @@ __tmainCRTStartup (void)
     duplicate_ppstrings (argc, &argv);
     __main ();
 #ifdef WPRFLAG
+#if !defined(__arm__) && !defined(__aarch64__)
     __winitenv = envp;
+#endif
     /* C++ initialization.
        gcc inserts this call automatically for a function called main, but not for wmain.  */
     mainret = wmain (argc, argv, envp);
 #else
+#if !defined(__arm__) && !defined(__aarch64__)
     __initenv = envp;
+#endif
     mainret = main (argc, argv, envp);
 #endif
     if (!managedapp)

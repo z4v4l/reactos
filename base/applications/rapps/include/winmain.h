@@ -1,5 +1,6 @@
 #pragma once
 #include <windef.h>
+#include <wininet.h>
 
 //TODO: Separate main and settings related definitions
 struct SETTINGS_INFO
@@ -19,17 +20,19 @@ struct SETTINGS_INFO
     INT Proxy;
     WCHAR szProxyServer[MAX_PATH];
     WCHAR szNoProxyFor[MAX_PATH];
+    /* Software source settings */
+    BOOL bUseSource;
+    WCHAR szSourceURL[INTERNET_MAX_URL_LENGTH];
 };
 
 typedef SETTINGS_INFO *PSETTINGS_INFO;
 
 extern HWND hMainWnd;
 extern HINSTANCE hInst;
-extern INT SelectedEnumType;
 extern SETTINGS_INFO SettingsInfo;
 
 VOID SaveSettings(HWND hwnd);
 VOID FillDefaultSettings(PSETTINGS_INFO pSettingsInfo);
 
-// integrity.cpp 
+// integrity.cpp
 BOOL VerifyInteg(LPCWSTR lpSHA1Hash, LPCWSTR lpFileName);

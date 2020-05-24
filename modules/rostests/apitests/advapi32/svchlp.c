@@ -13,10 +13,7 @@
  *   the service process, without really passing it 
  */
 
-#include <apitest.h>
-#include <winnls.h>
-#include <winsvc.h>
-#include <strsafe.h>
+#include "precomp.h"
 
 static HANDLE hClientPipe = INVALID_HANDLE_VALUE;
 static WCHAR named_pipe_name[100]; // Shared: FIXME!
@@ -33,7 +30,7 @@ void send_msg(const char *type, const char *msg)
     char buf[512];
 
     StringCbPrintfA(buf, sizeof(buf), "%s:%s", type, msg);
-    WriteFile(hClientPipe, buf, strlen(buf)+1, &written, NULL);
+    WriteFile(hClientPipe, buf, lstrlenA(buf)+1, &written, NULL);
 }
 
 void service_trace(const char *msg, ...)

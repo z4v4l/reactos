@@ -5,13 +5,7 @@
  * PROGRAMMERS:     Aleksandar Andrejevic <theflash AT sdf DOT lonestar DOT org>
  */
 
-#include <apitest.h>
-
-#define WIN32_NO_STATUS
-#include <ndk/rtlfuncs.h>
-#include <ndk/cmfuncs.h>
-#include <ndk/obfuncs.h>
-#include <ndk/setypes.h>
+#include "precomp.h"
 
 static
 NTSTATUS
@@ -37,7 +31,12 @@ START_TEST(NtSaveKey)
     NTSTATUS Status;
     HANDLE KeyHandle;
     HANDLE FileHandle;
+    BOOLEAN PrivilegeEnabled = FALSE;
     BOOLEAN OldPrivilegeStatus;
+
+    /* Make sure we don't have backup privileges initially, otherwise WHS testbot fails */
+    Status = RtlAdjustPrivilege(SE_BACKUP_PRIVILEGE, FALSE, FALSE, &PrivilegeEnabled);
+    ok(Status == STATUS_SUCCESS, "RtlAdjustPrivilege returned %lx\n", Status);
 
     /* Open the file */
     FileHandle = CreateFileW(L"saved_key.dat",

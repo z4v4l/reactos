@@ -9,13 +9,7 @@
  */
 #include "rapps.h"
 
-#include "gui.h"
 #include "misc.h"
-#include "cabinet.h"
-
- /* SESSION Operation */
-#define EXTRACT_FILLFILELIST  0x00000001
-#define EXTRACT_EXTRACTFILES  0x00000002
 
 static HANDLE hLog = NULL;
 
@@ -75,20 +69,6 @@ VOID CopyTextToClipboard(LPCWSTR lpszText)
         SetClipboardData(CF_UNICODETEXT, ClipBuffer);
 
     CloseClipboard();
-}
-
-VOID SetWelcomeText()
-{
-    ATL::CStringW szText;
-
-    szText.LoadStringW(IDS_WELCOME_TITLE);
-    NewRichEditText(szText, CFE_BOLD);
-
-    szText.LoadStringW(IDS_WELCOME_TEXT);
-    InsertRichEditText(szText, 0);
-
-    szText.LoadStringW(IDS_WELCOME_URL);
-    InsertRichEditText(szText, CFM_LINK);
 }
 
 VOID ShowPopupMenu(HWND hwnd, UINT MenuID, UINT DefaultItem)
@@ -201,55 +181,6 @@ BOOL GetStorageDirectory(ATL::CStringW& Directory)
     Directory += L"\\rapps";
 
     return (CreateDirectoryW(Directory.GetString(), NULL) || GetLastError() == ERROR_ALREADY_EXISTS);
-}
-
-BOOL ExtractFilesFromCab(const ATL::CStringW &CabName, const ATL::CStringW &OutputPath)
-{
-    return ExtractFilesFromCab(CabName.GetString(), OutputPath.GetString());
-}
-
-BOOL ExtractFilesFromCab(LPCWSTR lpCabName, LPCWSTR lpOutputPath)
-{
-    HINSTANCE hCabinetDll;
-    CHAR szCabName[MAX_PATH];
-    SESSION Dest;
-    HRESULT Result;
-    fnExtract pfnExtract;
-    
-    hCabinetDll = LoadLibraryW(L"cabinet.dll");
-    if (hCabinetDll)
-    {
-        pfnExtract = (fnExtract) GetProcAddress(hCabinetDll, "Extract");
-        if (pfnExtract)
-        {
-            ZeroMemory(&Dest, sizeof(Dest));
-
-            WideCharToMultiByte(CP_ACP, 0, lpOutputPath, -1, Dest.Destination, MAX_PATH, NULL, NULL);
-            WideCharToMultiByte(CP_ACP, 0, lpCabName, -1, szCabName, MAX_PATH, NULL, NULL);
-            Dest.Operation = EXTRACT_FILLFILELIST;
-
-            Result = pfnExtract(&Dest, szCabName);
-            if (Result == S_OK)
-            {
-                Dest.Operation = EXTRACT_EXTRACTFILES;
-                CreateDirectoryW(lpOutputPath, NULL);
-
-                Result = pfnExtract(&Dest, szCabName);
-                if (Result == S_OK)
-                {
-                    FreeLibrary(hCabinetDll);
-                    return TRUE;
-                }
-                else
-                {
-                    RemoveDirectoryW(lpOutputPath);
-                }
-            }
-        }
-        FreeLibrary(hCabinetDll);
-    }
-
-    return FALSE;
 }
 
 VOID InitLogs()
@@ -405,10 +336,13 @@ VOID CConfigParser::CacheINILocale()
     m_szCachedINISectionLocale = L"Section." + m_szLocaleID;
 
     // turn "Section.0c0a" into "Section.0a", keeping just the neutral lang part
-    m_szCachedINISectionLocaleNeutral = m_szCachedINISectionLocale + m_szLocaleID.Right(2);
+    if (m_szLocaleID.GetLength() >= 2)
+        m_szCachedINISectionLocaleNeutral = L"Section." + m_szLocaleID.Right(2);
+    else
+        m_szCachedINISectionLocaleNeutral = m_szCachedINISectionLocale;
 }
 
-UINT CConfigParser::GetString(const ATL::CStringW& KeyName, ATL::CStringW& ResultString)
+BOOL CConfigParser::GetString(const ATL::CStringW& KeyName, ATL::CStringW& ResultString)
 {
     DWORD dwResult;
 
@@ -446,9 +380,11 @@ UINT CConfigParser::GetString(const ATL::CStringW& KeyName, ATL::CStringW& Resul
     return (dwResult != 0 ? TRUE : FALSE);
 }
 
-UINT CConfigParser::GetInt(const ATL::CStringW& KeyName)
+BOOL CConfigParser::GetInt(const ATL::CStringW& KeyName, INT& iResult)
 {
     ATL::CStringW Buffer;
+
+    iResult = 0;
 
     // grab the text version of our entry
     if (!GetString(KeyName, Buffer))
@@ -458,8 +394,9 @@ UINT CConfigParser::GetInt(const ATL::CStringW& KeyName)
         return FALSE;
 
     // convert it to an actual integer
-    INT result = StrToIntW(Buffer.GetString());
+    iResult = StrToIntW(Buffer.GetString());
 
-    return (UINT) (result <= 0) ? 0 : result;
+    // we only care about values > 0
+    return (iResult > 0);
 }
 // CConfigParser

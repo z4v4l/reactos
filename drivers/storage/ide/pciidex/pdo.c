@@ -257,10 +257,10 @@ PciIdeXPdoQueryResourceRequirements(
 	Descriptor->Flags = CM_RESOURCE_PORT_IO |
 	                    CM_RESOURCE_PORT_16_BIT_DECODE |
 	                    CM_RESOURCE_PORT_POSITIVE_DECODE;
-	Descriptor->u.Port.Length = 7;
+	Descriptor->u.Port.Length = 8;
 	Descriptor->u.Port.Alignment = 1;
 	Descriptor->u.Port.MinimumAddress.QuadPart = (ULONGLONG)CommandPortBase;
-	Descriptor->u.Port.MaximumAddress.QuadPart = (ULONGLONG)(CommandPortBase + 7 - 1);
+	Descriptor->u.Port.MaximumAddress.QuadPart = (ULONGLONG)(CommandPortBase + Descriptor->u.Port.Length - 1);
 	Descriptor++;
 
 	/* Control port base */
@@ -273,7 +273,7 @@ PciIdeXPdoQueryResourceRequirements(
 	Descriptor->u.Port.Length = 1;
 	Descriptor->u.Port.Alignment = 1;
 	Descriptor->u.Port.MinimumAddress.QuadPart = (ULONGLONG)ControlPortBase;
-	Descriptor->u.Port.MaximumAddress.QuadPart = (ULONGLONG)(ControlPortBase + 1 - 1);
+	Descriptor->u.Port.MaximumAddress.QuadPart = (ULONGLONG)(ControlPortBase + Descriptor->u.Port.Length - 1);
 	Descriptor++;
 
 	/* Interrupt */
@@ -428,8 +428,7 @@ PciIdeXPdoPnpDispatch(
 				{
 					DPRINT1("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_RELATIONS / Unknown type 0x%lx\n",
 						Stack->Parameters.QueryDeviceRelations.Type);
-					ASSERT(FALSE);
-					Status = STATUS_NOT_SUPPORTED;
+					Status = Irp->IoStatus.Status;
 					break;
 				}
 			}
@@ -526,7 +525,6 @@ PciIdeXPdoPnpDispatch(
 			/* We can't forward request to the lower driver, because
 			 * we are a Pdo, so we don't have lower driver... */
 			DPRINT1("IRP_MJ_PNP / Unknown minor function 0x%lx\n", MinorFunction);
-			ASSERT(FALSE);
 			Information = Irp->IoStatus.Information;
 			Status = Irp->IoStatus.Status;
 		}

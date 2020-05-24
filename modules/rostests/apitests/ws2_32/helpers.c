@@ -6,9 +6,6 @@
  * COPYRIGHT:   Copyright 2008 Colin Finck <mail@colinfinck.de>
  */
 
-#include <apitest.h>
-
-#include <stdio.h>
 #include "ws2_32.h"
 
 int CreateSocket(SOCKET* psck)
@@ -52,7 +49,7 @@ int GetRequestAndWait(SOCKET sck)
     struct fd_set readable;
 
     /* Send the GET request */
-    SCKTEST(send(sck, szGetRequest, strlen(szGetRequest), 0));
+    SCKTEST(send(sck, szGetRequest, lstrlenA(szGetRequest), 0));
     ok(iResult == strlen(szGetRequest), "iResult = %d\n", iResult);
 #if 0 /* breaks windows too */
     /* Shutdown the SEND connection */

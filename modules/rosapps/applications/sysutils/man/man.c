@@ -15,6 +15,7 @@
   */
 
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
@@ -37,7 +38,7 @@ int AnalyzeFile();
 /*====[Globals]====*/
 FILE* manfile;
 char OpenFlag=0;
-char manpath[MAXLINE]="c:\\man\\";
+char manpath[MAX_PATH];
 /*=================*/
 
 void
@@ -49,21 +50,34 @@ SetCl(WORD cl)
 int
 OpenF(char* name)
 {
-    int retval=0;
-    char *manpath_local=(char*)malloc(sizeof(char)*MAXLINE);
+    int ret = 0;
+    char *cp;
 
-    strcpy(manpath_local, manpath); //save mandir value
-
-    if((manfile=fopen((strcat(manpath_local,name)),"r"))!=NULL)
-     {
-      OpenFlag=1;
-      AnalyzeFile();
-     }
+    /* C:\man\\... */
+    cp = getenv("SystemDrive");
+    if (cp && *cp)
+    {
+        strcpy(manpath, cp);
+        strcat(manpath, "\\man\\");
+    }
     else
-     retval=-1;
+    {
+        strcpy(manpath, "C:\\man\\");
+    }
+    strcat(manpath, name);
 
-    free(manpath_local);
-    return retval;
+    manfile = fopen(manpath, "r");
+    if (manfile != NULL)
+    {
+        OpenFlag = 1;
+        AnalyzeFile();
+    }
+    else
+    {
+        ret = -1;
+    }
+
+    return ret;
 }
 
 int
@@ -88,7 +102,7 @@ Usage()
 int
 AnalyzeArgv(char *argument)
 {
-    int element=0;
+    int element;
     char HelpFlag=0;
     char *keys[]={"--help","/h","/?","-h"};
     char *sections[]={".1",".2",".3",".4",".5",".6",".7",".8",".9"};
@@ -96,25 +110,32 @@ AnalyzeArgv(char *argument)
 
     strcpy(filename,argument); //save argument value
 
-    for(element=0; element < 5;element++)
+    for(element=0;element<_countof(keys);element++)
+    {
      if(!strcmp(keys[element],argument))
      {
       Usage();
       HelpFlag=1;
      }
+    }
 
    element = 0;
 
    if(!HelpFlag)
+   {
 
    if(OpenF(filename))
-    while(OpenF(strcat(filename,sections[element])) && (element<9))
+   {
+    while(element<_countof(sections)&&OpenF(strcat(filename,sections[element])))
     {
      strcpy(filename,argument);
      element++;
     }
 
-    if(element>8) printf("No manual for %s\n",argument);
+    if(element>=_countof(sections)) printf("No manual for %s\n",argument);
+   }
+
+   }
 
     return element;
 }
@@ -148,10 +169,10 @@ void text_outp(char *cur_string)
         while(cur_string[symbol]!=' ')
             symbol++;
 
-
     for(;cur_string[symbol]!='\n'; symbol++)
         putchar(cur_string[symbol]);
-        putchar(' ');
+
+    putchar(' ');
 }
 
 int
@@ -207,13 +228,16 @@ AnalyzeFile()
         putchar(' ');
        }
 
-     else text_outp(cur_string); // print plane text
-     th_outp(cur_string, THtag);
-/* END of TAGs processing */
-     free(cur_string);
-     free(THtag);
+     else
+     {
+       text_outp(cur_string); // print plane text
+     }
+    th_outp(cur_string, THtag);
+    /* END of TAGs processing */
 
-     return 0;
+    free(cur_string);
+    free(THtag);
+    return 0;
 }
 
 

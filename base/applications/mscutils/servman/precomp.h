@@ -7,12 +7,15 @@
 
 #include <windef.h>
 #include <winbase.h>
+#include <winerror.h>
 #include <wingdi.h>
 #include <winsvc.h>
 #include <wincon.h>
+
 #include <shlobj.h>
 #include <commdlg.h>
 #include <strsafe.h>
+#include <process.h>
 
 #include "resource.h"
 
@@ -99,9 +102,9 @@ VOID ListViewSelectionChanged(PMAIN_WND_INFO Info, LPNMLISTVIEW pnmv);
 BOOL CreateListView(PMAIN_WND_INFO Info);
 
 /* start / stop / control */
-BOOL DoStartService(LPWSTR ServiceName, HANDLE hProgress, LPWSTR lpStartParams);
-BOOL DoStopService(LPWSTR ServiceName, HANDLE hProgress);
-BOOL DoControlService(LPWSTR ServiceName, HWND hProgress, DWORD Control);
+DWORD DoStartService(LPWSTR ServiceName, HANDLE hProgress, LPWSTR lpStartParams);
+DWORD DoStopService(LPWSTR ServiceName, HANDLE hProgress);
+DWORD DoControlService(LPWSTR ServiceName, HWND hProgress, DWORD Control);
 
 /* progress.c */
 #define DEFAULT_STEP 0
@@ -121,17 +124,23 @@ BOOL RefreshServiceList(PMAIN_WND_INFO Info);
 BOOL UpdateServiceStatus(ENUM_SERVICE_STATUS_PROCESS* pService);
 BOOL GetServiceList(PMAIN_WND_INFO Info);
 
-
 /* propsheet.c */
 typedef struct _SERVICEPROPSHEET
 {
     PMAIN_WND_INFO Info;
     ENUM_SERVICE_STATUS_PROCESS *pService;
+
+} SERVICEPROPSHEET, *PSERVICEPROPSHEET;
+
+typedef struct _DEPENDDATA
+{
+    PSERVICEPROPSHEET pDlgInfo;
     HIMAGELIST hDependsImageList;
     HWND hDependsWnd;
     HWND hDependsTreeView1;
     HWND hDependsTreeView2;
-} SERVICEPROPSHEET, *PSERVICEPROPSHEET;
+
+} DEPENDDATA, *PDEPENDDATA;
 
 
 HTREEITEM AddItemToTreeView(HWND hTreeView, HTREEITEM hRoot, LPWSTR lpDisplayName, LPWSTR lpServiceName, ULONG serviceType, BOOL bHasChildren);
@@ -146,16 +155,16 @@ LPWSTR DisplayName,
 LPWSTR ServiceList);
 
 /* tv1_dependencies */
-BOOL TV1_Initialize(PSERVICEPROPSHEET pDlgInfo, LPWSTR lpServiceName);
-VOID TV1_AddDependantsToTree(PSERVICEPROPSHEET pDlgInfo, HTREEITEM hParent, LPWSTR lpServiceName);
+BOOL TV1_Initialize(PDEPENDDATA pDependData, LPWSTR lpServiceName);
+VOID TV1_AddDependantsToTree(PDEPENDDATA pDependData, HTREEITEM hParent, LPWSTR lpServiceName);
 
 /* tv2_dependencies */
-BOOL TV2_Initialize(PSERVICEPROPSHEET pDlgInfo, LPWSTR lpServiceName);
-VOID TV2_AddDependantsToTree(PSERVICEPROPSHEET pDlgInfo, HTREEITEM hParent, LPWSTR lpServiceName);
+BOOL TV2_Initialize(PDEPENDDATA pDependData, LPWSTR lpServiceName);
+VOID TV2_AddDependantsToTree(PDEPENDDATA pDependData, HTREEITEM hParent, LPWSTR lpServiceName);
 BOOL TV2_HasDependantServices(LPWSTR lpServiceName);
 LPENUM_SERVICE_STATUS TV2_GetDependants(LPWSTR lpServiceName, LPDWORD lpdwCount);
 
-LONG APIENTRY OpenPropSheet(PMAIN_WND_INFO Info);
+VOID OpenPropSheet(PMAIN_WND_INFO Info);
 
 /* propsheet window procs */
 INT_PTR CALLBACK DependenciesPageProc(HWND hwndDlg,

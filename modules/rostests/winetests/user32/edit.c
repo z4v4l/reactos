@@ -38,17 +38,6 @@ struct edit_notify {
 
 static struct edit_notify notifications;
 
-static BOOL (WINAPI *pEndMenu) (void);
-static BOOL (WINAPI *pGetMenuBarInfo)(HWND,LONG,LONG,PMENUBARINFO);
-
-static void init_function_pointers(void)
-{
-    HMODULE hdll = GetModuleHandleA("user32");
-
-    pEndMenu = (void*)GetProcAddress(hdll, "EndMenu");
-    pGetMenuBarInfo = (void*)GetProcAddress(hdll, "GetMenuBarInfo");
-}
-
 static INT_PTR CALLBACK multi_edit_dialog_proc(HWND hdlg, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     static int num_ok_commands = 0;
@@ -568,6 +557,18 @@ static HWND create_editcontrol (DWORD style, DWORD exstyle)
     return handle;
 }
 
+static HWND create_editcontrolW(DWORD style, DWORD exstyle)
+{
+    static const WCHAR testtextW[] = {'T','e','s','t',' ','t','e','x','t',0};
+    static const WCHAR editW[] = {'E','d','i','t',0};
+    HWND handle;
+
+    handle = CreateWindowExW(exstyle, editW, testtextW, style, 10, 10, 300, 300,
+        NULL, NULL, hinst, NULL);
+    ok(handle != NULL, "Failed to create Edit control.\n");
+    return handle;
+}
+
 static HWND create_child_editcontrol (DWORD style, DWORD exstyle)
 {
     HWND parentWnd;
@@ -867,7 +868,7 @@ static LRESULT CALLBACK edit3_wnd_procA(HWND hWnd, UINT msg, WPARAM wParam, LPAR
     return DefWindowProcA(hWnd, msg, wParam, lParam);
 }
 
-/* Test behaviour of WM_SETTEXT, WM_REPLACESEL and notificatisons sent in response
+/* Test behaviour of WM_SETTEXT, WM_REPLACESEL and notifications sent in response
  * to these messages.
  */
 static void test_edit_control_3(void)
@@ -967,6 +968,19 @@ static void test_edit_control_3(void)
     SendMessageA(hWnd, WM_SETTEXT, 0, (LPARAM)str);
     len = SendMessageA(hWnd, WM_GETTEXTLENGTH, 0, 0);
     ok(lstrlenA(str) == len, "text shouldn't have been truncated\n");
+    test_notify(1, 0, 1);
+
+    SendMessageA(hWnd, WM_SETTEXT, 0, (LPARAM)"");
+    zero_notify();
+    SendMessageA(hWnd, EM_REPLACESEL, 0, (LPARAM)str2);
+    len = SendMessageA(hWnd, WM_GETTEXTLENGTH, 0, 0);
+    ok(lstrlenA(str2) == len, "text shouldn't have been truncated\n");
+    test_notify(1, 0, 1);
+
+    zero_notify();
+    SendMessageA(hWnd, WM_SETTEXT, 0, (LPARAM)str2);
+    len = SendMessageA(hWnd, WM_GETTEXTLENGTH, 0, 0);
+    ok(lstrlenA(str2) == len, "text shouldn't have been truncated\n");
     test_notify(1, 0, 1);
 
     SendMessageA(hWnd, EM_SETLIMITTEXT, 5, 0);
@@ -1421,16 +1435,27 @@ static void test_edit_control_scroll(void)
     DestroyWindow (hwEdit);
 }
 
+static BOOL is_cjk_charset(HDC dc)
+{
+    switch (GdiGetCodePage(dc)) {
+    case 932: case 936: case 949: case 950: case 1361:
+        return TRUE;
+    default:
+        return FALSE;
+    }
+}
+
 static void test_margins_usefontinfo(UINT charset)
 {
     HWND hwnd;
     HDC hdc;
+    TEXTMETRICW tm;
     SIZE size;
-    BOOL cjk = FALSE;
     LOGFONTA lf;
     HFONT hfont;
     RECT rect;
-    INT margins, threshold, expect, empty_expect, small_expect;
+    INT margins, threshold, expect, empty_expect;
+    const UINT small_margins = MAKELONG(1, 5);
 
     memset(&lf, 0, sizeof(lf));
     lf.lfHeight = -11;
@@ -1449,40 +1474,31 @@ static void test_margins_usefontinfo(UINT charset)
 
     hdc = GetDC(hwnd);
     hfont = SelectObject(hdc, hfont);
-    size.cx = GdiGetCharDimensions( hdc, NULL, &size.cy );
-    expect = MAKELONG(size.cx / 2, size.cx / 2);
-    small_expect = 0;
-    empty_expect = size.cx >= 28 ? small_expect : expect;
-
-    charset = GetTextCharset(hdc);
-    switch (charset)
-    {
-    case SHIFTJIS_CHARSET:
-    case HANGUL_CHARSET:
-    case GB2312_CHARSET:
-    case CHINESEBIG5_CHARSET:
-        cjk = TRUE;
+    size.cx = GdiGetCharDimensions( hdc, &tm, &size.cy );
+    if ((charset != tm.tmCharSet && charset != DEFAULT_CHARSET) ||
+        !(tm.tmPitchAndFamily & (TMPF_TRUETYPE | TMPF_VECTOR))) {
+        skip("%s for charset %d isn't available\n", lf.lfFaceName, charset);
+        hfont = SelectObject(hdc, hfont);
+        ReleaseDC(hwnd, hdc);
+        DestroyWindow(hwnd);
+        DeleteObject(hfont);
+        return;
     }
-
+    expect = MAKELONG(size.cx / 2, size.cx / 2);
     hfont = SelectObject(hdc, hfont);
     ReleaseDC(hwnd, hdc);
 
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
     ok(margins == 0, "got %x\n", margins);
     SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
-    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
-    if (!cjk)
-        ok(margins == expect, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
-    else
-    {
-        ok(HIWORD(margins) > 0 && LOWORD(margins) > 0, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
-        expect = empty_expect = small_expect = margins;
-    }
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO, EC_USEFONTINFO));
+    expect = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
     DestroyWindow(hwnd);
 
-    threshold = (size.cx / 2 + size.cx) * 2;
+    threshold = HIWORD(expect) + LOWORD(expect) + size.cx * 2;
+    empty_expect = threshold > 80 ? small_margins : expect;
 
-    /* Size below which non-cjk margins are zero */
+    /* Size below the threshold, margins remain unchanged */
     hwnd = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, threshold - 1, 100, NULL, NULL, NULL, NULL);
     ok(hwnd != NULL, "got %p\n", hwnd);
     GetClientRect(hwnd, &rect);
@@ -1492,11 +1508,13 @@ static void test_margins_usefontinfo(UINT charset)
     ok(margins == 0, "got %x\n", margins);
 
     SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO, EC_USEFONTINFO));
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
-    ok(margins == small_expect, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
+    ok(margins == small_margins, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
     DestroyWindow(hwnd);
 
-    /* Size at which non-cjk margins become non-zero */
+    /* Size at the threshold, margins become non-zero */
     hwnd = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, threshold, 100, NULL, NULL, NULL, NULL);
     ok(hwnd != NULL, "got %p\n", hwnd);
     GetClientRect(hwnd, &rect);
@@ -1506,6 +1524,8 @@ static void test_margins_usefontinfo(UINT charset)
     ok(margins == 0, "got %x\n", margins);
 
     SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO, EC_USEFONTINFO));
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
     ok(margins == expect, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
     DestroyWindow(hwnd);
@@ -1520,11 +1540,187 @@ static void test_margins_usefontinfo(UINT charset)
     ok(margins == 0, "got %x\n", margins);
 
     SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO, EC_USEFONTINFO));
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
     ok(margins == empty_expect, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
     DestroyWindow(hwnd);
 
     DeleteObject(hfont);
+}
+
+static BOOL is_cjk_font(HDC dc)
+{
+    const DWORD FS_DBCS_MASK = FS_JISJAPAN|FS_CHINESESIMP|FS_WANSUNG|FS_CHINESETRAD|FS_JOHAB;
+    FONTSIGNATURE fs;
+    return (GetTextCharsetInfo(dc, &fs, 0) != DEFAULT_CHARSET &&
+            (fs.fsCsb[0] & FS_DBCS_MASK));
+}
+
+static INT get_cjk_fontinfo_margin(INT width, INT side_bearing)
+{
+    INT margin;
+    if (side_bearing < 0)
+        margin = min(-side_bearing, width/2);
+    else
+        margin = 0;
+    return margin;
+}
+
+static DWORD get_cjk_font_margins(HDC hdc, BOOL unicode)
+{
+    ABC abc[256];
+    SHORT left, right;
+    UINT i;
+
+    left = right = 0;
+    if (unicode) {
+        if (!GetCharABCWidthsW(hdc, 0, 255, abc))
+            return 0;
+    }
+    else {
+        if (!GetCharABCWidthsA(hdc, 0, 255, abc))
+            return 0;
+    }
+    for (i = 0; i < ARRAY_SIZE(abc); i++) {
+        if (-abc[i].abcA > right) right = -abc[i].abcA;
+        if (-abc[i].abcC > left)  left  = -abc[i].abcC;
+    }
+    return MAKELONG(left, right);
+}
+
+static void test_margins_default(const char* facename, UINT charset)
+{
+    HWND hwnd;
+    HDC hdc;
+    TEXTMETRICW tm;
+    SIZE size;
+    BOOL cjk_charset, cjk_font;
+    LOGFONTA lf;
+    HFONT hfont;
+    RECT rect;
+    INT margins, expect, font_expect;
+    const UINT small_margins = MAKELONG(1, 5);
+    const WCHAR EditW[] = {'E','d','i','t',0}, strW[] = {'W',0};
+    struct char_width_info {
+        INT lsb, rsb, unknown;
+    } info;
+    HMODULE hgdi32;
+    BOOL (WINAPI *pGetCharWidthInfo)(HDC, struct char_width_info *);
+
+    hgdi32 = GetModuleHandleA("gdi32.dll");
+    pGetCharWidthInfo = (void *)GetProcAddress(hgdi32, "GetCharWidthInfo");
+
+    memset(&lf, 0, sizeof(lf));
+    lf.lfHeight = -11;
+    lf.lfWeight = FW_NORMAL;
+    lf.lfCharSet = charset;
+    strcpy(lf.lfFaceName, facename);
+
+    hfont = CreateFontIndirectA(&lf);
+    ok(hfont != NULL, "got %p\n", hfont);
+
+    /* Unicode version */
+    hwnd = CreateWindowExW(0, EditW, strW, WS_POPUP, 0, 0, 5000, 1000, NULL, NULL, NULL, NULL);
+    ok(hwnd != NULL, "got %p\n", hwnd);
+    GetClientRect(hwnd, &rect);
+    ok(!IsRectEmpty(&rect), "got rect %s\n", wine_dbgstr_rect(&rect));
+
+    hdc = GetDC(hwnd);
+    hfont = SelectObject(hdc, hfont);
+    size.cx = GdiGetCharDimensions( hdc, &tm, &size.cy );
+    if ((charset != tm.tmCharSet && charset != DEFAULT_CHARSET) ||
+        !(tm.tmPitchAndFamily & (TMPF_TRUETYPE | TMPF_VECTOR))) {
+        skip("%s for charset %d isn't available\n", lf.lfFaceName, charset);
+        hfont = SelectObject(hdc, hfont);
+        ReleaseDC(hwnd, hdc);
+        DestroyWindow(hwnd);
+        DeleteObject(hfont);
+        return;
+    }
+    cjk_charset = is_cjk_charset(hdc);
+    cjk_font = is_cjk_font(hdc);
+    if ((cjk_charset || cjk_font) &&
+        pGetCharWidthInfo && pGetCharWidthInfo(hdc, &info)) {
+        short left, right;
+
+        left  = get_cjk_fontinfo_margin(size.cx, info.lsb);
+        right = get_cjk_fontinfo_margin(size.cx, info.rsb);
+        expect = MAKELONG(left, right);
+
+        font_expect = get_cjk_font_margins(hdc, TRUE);
+        if (!font_expect)
+            /* In this case, margins aren't updated */
+            font_expect = small_margins;
+    }
+    else
+        font_expect = expect = MAKELONG(size.cx / 2, size.cx / 2);
+
+    hfont = SelectObject(hdc, hfont);
+    ReleaseDC(hwnd, hdc);
+
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == 0, "got %x\n", margins);
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
+    SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == font_expect, "%s:%d: expected %d, %d, got %d, %d\n", facename, charset, HIWORD(font_expect), LOWORD(font_expect), HIWORD(margins), LOWORD(margins));
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO, EC_USEFONTINFO));
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == expect, "%s:%d: expected %d, %d, got %d, %d\n", facename, charset, HIWORD(expect), LOWORD(expect), HIWORD(margins), LOWORD(margins));
+    DestroyWindow(hwnd);
+
+    /* ANSI version */
+    hwnd = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, 5000, 1000, NULL, NULL, NULL, NULL);
+    ok(hwnd != NULL, "got %p\n", hwnd);
+    GetClientRect(hwnd, &rect);
+    ok(!IsRectEmpty(&rect), "got rect %s\n", wine_dbgstr_rect(&rect));
+
+    if (cjk_charset) {
+        hdc = GetDC(hwnd);
+        hfont = SelectObject(hdc, hfont);
+        font_expect = get_cjk_font_margins(hdc, FALSE);
+        if (!font_expect)
+            /* In this case, margins aren't updated */
+            font_expect = small_margins;
+        hfont = SelectObject(hdc, hfont);
+        ReleaseDC(hwnd, hdc);
+    }
+    else
+        /* we expect EC_USEFONTINFO size */
+        font_expect = expect;
+
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == 0, "got %x\n", margins);
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
+    SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == font_expect, "%s:%d: expected %d, %d, got %d, %d\n", facename, charset, HIWORD(font_expect), LOWORD(font_expect), HIWORD(margins), LOWORD(margins));
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
+    SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO, EC_USEFONTINFO));
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == expect, "%s:%d: expected %d, %d, got %d, %d\n", facename, charset, HIWORD(expect), LOWORD(expect), HIWORD(margins), LOWORD(margins));
+    DestroyWindow(hwnd);
+
+    DeleteObject(hfont);
+}
+
+static INT CALLBACK find_font_proc(const LOGFONTA *elf, const TEXTMETRICA *ntm, DWORD type, LPARAM lParam)
+{
+    return 0;
+}
+
+static BOOL is_font_installed(const char*name)
+{
+    HDC hdc = GetDC(NULL);
+    BOOL ret = FALSE;
+
+    if (!EnumFontFamiliesA(hdc, name, find_font_proc, 0))
+        ret = TRUE;
+
+    ReleaseDC(NULL, hdc);
+    return ret;
 }
 
 static void test_margins(void)
@@ -1601,11 +1797,33 @@ static void test_margins(void)
        but not by < Win 8 and Win 10. */
 
     test_margins_usefontinfo(DEFAULT_CHARSET);
-}
 
-static INT CALLBACK find_font_proc(const LOGFONTA *elf, const TEXTMETRICA *ntm, DWORD type, LPARAM lParam)
-{
-    return 0;
+    test_margins_default("Tahoma", ANSI_CHARSET);
+    test_margins_default("Tahoma", EASTEUROPE_CHARSET);
+
+    test_margins_default("Tahoma", HANGUL_CHARSET);
+    test_margins_default("Tahoma", CHINESEBIG5_CHARSET);
+
+    if (is_font_installed("MS PGothic")) {
+        test_margins_default("MS PGothic", SHIFTJIS_CHARSET);
+        test_margins_default("MS PGothic", GREEK_CHARSET);
+    }
+    else
+        skip("MS PGothic is not available, skipping some margin tests\n");
+
+    if (is_font_installed("Ume P Gothic")) {
+        test_margins_default("Ume P Gothic", SHIFTJIS_CHARSET);
+        test_margins_default("Ume P Gothic", GREEK_CHARSET);
+    }
+    else
+        skip("Ume P Gothic is not available, skipping some margin tests\n");
+
+    if (is_font_installed("SimSun")) {
+        test_margins_default("SimSun", GB2312_CHARSET);
+        test_margins_default("SimSun", ANSI_CHARSET);
+    }
+    else
+        skip("SimSun is not available, skipping some margin tests\n");
 }
 
 static void test_margins_font_change(void)
@@ -1614,15 +1832,12 @@ static void test_margins_font_change(void)
     DWORD margins, font_margins;
     LOGFONTA lf;
     HFONT hfont, hfont2;
-    HDC hdc = GetDC(0);
 
-    if(EnumFontFamiliesA(hdc, "Arial", find_font_proc, 0))
+    if (!is_font_installed("Arial"))
     {
-        trace("Arial not found - skipping font change margin tests\n");
-        ReleaseDC(0, hdc);
+        skip("Arial not found - skipping font change margin tests\n");
         return;
     }
-    ReleaseDC(0, hdc);
 
     hwEdit = create_child_editcontrol(0, 0);
 
@@ -1631,7 +1846,7 @@ static void test_margins_font_change(void)
     memset(&lf, 0, sizeof(lf));
     strcpy(lf.lfFaceName, "Arial");
     lf.lfHeight = 16;
-    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfCharSet = GREEK_CHARSET; /* to avoid associated charset feature */
     hfont = CreateFontIndirectA(&lf);
     lf.lfHeight = 30;
     hfont2 = CreateFontIndirectA(&lf);
@@ -1646,39 +1861,39 @@ static void test_margins_font_change(void)
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(0,0));
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 0 || broken(LOWORD(margins) == LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 0,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 0 || broken(HIWORD(margins) == HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 0,
        "got %d\n", HIWORD(margins));
 
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(1,0));
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 1 || broken(LOWORD(margins) == LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 1,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 0 || broken(HIWORD(margins) == HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 0,
        "got %d\n", HIWORD(margins));
 
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(1,1));
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 1 || broken(LOWORD(margins) == LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 1,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 1 || broken(HIWORD(margins) == HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 1,
        "got %d\n", HIWORD(margins));
 
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO,EC_USEFONTINFO));
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 1 || broken(LOWORD(margins) == LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 1,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 1 || broken(HIWORD(margins) == HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 1,
        "got %d\n", HIWORD(margins));
 
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont2, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 1 || broken(LOWORD(margins) != 1 && LOWORD(margins) != LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 1,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 1 || broken(HIWORD(margins) != 1 && HIWORD(margins) != HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 1,
        "got %d\n", HIWORD(margins));
 
     /* Above a certain size threshold then the margin is updated */
@@ -1702,7 +1917,7 @@ static void test_margins_font_change(void)
     ok(HIWORD(margins) == HIWORD(font_margins), "got %d\n", HIWORD(margins)); 
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont2, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) != LOWORD(font_margins) || broken(LOWORD(margins) == LOWORD(font_margins)), /* win98 */
+    ok(LOWORD(margins) != LOWORD(font_margins),
        "got %d\n", LOWORD(margins));
     ok(HIWORD(margins) != HIWORD(font_margins), "got %d\n", HIWORD(margins)); 
 
@@ -2281,7 +2496,7 @@ static LRESULT CALLBACK edit4_wnd_procA(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             if (hWnd != (HWND)lParam)
             {
                 got_wm_capturechanged = TRUE;
-                pEndMenu();
+                EndMenu();
             }
             break;
     }
@@ -2299,9 +2514,8 @@ static LRESULT CALLBACK edit_proc_proxy(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             memset(&mbi, 0, sizeof(mbi));
             mbi.cbSize = sizeof(mbi);
             SetLastError(0xdeadbeef);
-            ret = pGetMenuBarInfo(ctx_menu, OBJID_CLIENT, 0, &mbi);
-            ok(ret || broken(!ret && GetLastError()==ERROR_INVALID_WINDOW_HANDLE) /* NT */,
-                    "GetMenuBarInfo failed\n");
+            ret = GetMenuBarInfo(ctx_menu, OBJID_CLIENT, 0, &mbi);
+            ok(ret, "GetMenuBarInfo failed\n");
             if (ret)
             {
                 ok(mbi.hMenu != NULL, "mbi.hMenu = NULL\n");
@@ -2313,9 +2527,8 @@ static LRESULT CALLBACK edit_proc_proxy(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             memset(&mbi, 0, sizeof(mbi));
             mbi.cbSize = sizeof(mbi);
             SetLastError(0xdeadbeef);
-            ret = pGetMenuBarInfo(ctx_menu, OBJID_CLIENT, 1, &mbi);
-            ok(ret || broken(!ret && GetLastError()==ERROR_INVALID_WINDOW_HANDLE) /* NT */,
-                    "GetMenuBarInfo failed\n");
+            ret = GetMenuBarInfo(ctx_menu, OBJID_CLIENT, 1, &mbi);
+            ok(ret, "GetMenuBarInfo failed\n");
             if (ret)
             {
                 ok(mbi.hMenu != NULL, "mbi.hMenu = NULL\n");
@@ -2324,7 +2537,7 @@ static LRESULT CALLBACK edit_proc_proxy(HWND hWnd, UINT msg, WPARAM wParam, LPAR
                 ok(!mbi.fFocused, "mbi.fFocused = TRUE\n");
             }
 
-            pEndMenu();
+            EndMenu();
             break;
         }
     }
@@ -2345,7 +2558,7 @@ static LRESULT CALLBACK child_edit_menu_proc(HWND hwnd, UINT msg, WPARAM wParam,
         if (wParam == MSGF_MENU) {
             HWND hwndMenu = (HWND)lParam;
             MENUBARINFO mbi = { sizeof(MENUBARINFO) };
-            if (pGetMenuBarInfo(hwndMenu, OBJID_CLIENT, 0, &mbi)) {
+            if (GetMenuBarInfo(hwndMenu, OBJID_CLIENT, 0, &mbi)) {
                 MENUITEMINFOA mii = { sizeof(MENUITEMINFOA), MIIM_STATE };
                 if (GetMenuItemInfoA(mbi.hMenu, EM_SETSEL, FALSE, &mii)) {
                     if (mii.fState & MFS_HILITE) {
@@ -2391,11 +2604,8 @@ static void test_contextmenu(void)
     ok(got_en_setfocus, "edit box didn't get focused\n");
     ok(got_wm_capturechanged, "main window capture did not change\n");
 
-    if (pGetMenuBarInfo)
-    {
-        p_edit_proc = (void*)SetWindowLongPtrA(hwndEdit, GWLP_WNDPROC, (ULONG_PTR)edit_proc_proxy);
-        SendMessageA(hwndEdit, WM_CONTEXTMENU, (WPARAM)hwndEdit, MAKEWORD(10, 10));
-    }
+    p_edit_proc = (void*)SetWindowLongPtrA(hwndEdit, GWLP_WNDPROC, (ULONG_PTR)edit_proc_proxy);
+    SendMessageA(hwndEdit, WM_CONTEXTMENU, (WPARAM)hwndEdit, MAKEWORD(10, 10));
 
     DestroyWindow (hwndEdit);
 
@@ -2722,6 +2932,7 @@ static void test_EM_GETHANDLE(void)
 {
     static const char str0[] = "untouched";
     static const char str1[] = "1111+1111+1111#";
+    static const char str1_1[] = "2111+1111+1111#";
     static const char str2[] = "2222-2222-2222-2222#";
     static const char str3[] = "3333*3333*3333*3333*3333#";
     CHAR    current[42];
@@ -2768,6 +2979,44 @@ static void test_EM_GETHANDLE(void)
     len = lstrlenA(buffer);
     ok((len == lstrlenA(str1)) && !lstrcmpA(buffer, str1),
         "got %d and \"%s\" (expected %d and \"%s\")\n", len, buffer, lstrlenA(str1), str1);
+    LocalUnlock(hmem);
+
+    /* See if WM_GETTEXTLENGTH/WM_GETTEXT still work. */
+    len = SendMessageA(hEdit, WM_GETTEXTLENGTH, 0, 0);
+    ok(len == lstrlenA(str1), "Unexpected text length %d.\n", len);
+
+    lstrcpyA(current, str0);
+    r = SendMessageA(hEdit, WM_GETTEXT, sizeof(current), (LPARAM)current);
+    ok((r == lstrlenA(str1)) && !lstrcmpA(current, str1),
+        "Unexpected retval %d and text \"%s\" (expected %d and \"%s\")\n", r, current, lstrlenA(str1), str1);
+
+    /* Application altered buffer contents, see if WM_GETTEXTLENGTH/WM_GETTEXT pick that up. */
+    buffer = LocalLock(hmem);
+    ok(buffer != NULL, "got %p (expected != NULL)\n", buffer);
+    buffer[0] = '2';
+    LocalUnlock(hmem);
+
+    len = SendMessageA(hEdit, WM_GETTEXTLENGTH, 0, 0);
+    ok(len == lstrlenA(str1_1), "Unexpected text length %d.\n", len);
+
+    lstrcpyA(current, str0);
+    r = SendMessageA(hEdit, WM_GETTEXT, sizeof(current), (LPARAM)current);
+    ok((r == lstrlenA(str1_1)) && !lstrcmpA(current, str1_1),
+        "Unexpected retval %d and text \"%s\" (expected %d and \"%s\")\n", r, current, lstrlenA(str1_1), str1_1);
+
+    /* See if WM_SETTEXT/EM_REPLACESEL work. */
+    r = SendMessageA(hEdit, WM_SETTEXT, 0, (LPARAM)str1);
+    ok(r, "Failed to set text.\n");
+
+    buffer = LocalLock(hmem);
+    ok(buffer != NULL && buffer[0] == '1', "Unexpected buffer contents\n");
+    LocalUnlock(hmem);
+
+    r = SendMessageA(hEdit, EM_REPLACESEL, 0, (LPARAM)str1_1);
+    ok(r, "Failed to replace selection.\n");
+
+    buffer = LocalLock(hmem);
+    ok(buffer != NULL && buffer[0] == '2', "Unexpected buffer contents\n");
     LocalUnlock(hmem);
 
     /* use LocalAlloc first to get a different handle */
@@ -2831,12 +3080,160 @@ static void test_EM_GETHANDLE(void)
     DestroyWindow(hEdit);
 }
 
+static void test_paste(void)
+{
+    HWND hEdit, hMultilineEdit;
+    HANDLE hmem, hmem_ret;
+    char *buffer;
+    int r, len;
+    static const char *str = "this is a simple text";
+    static const char *str2 = "first line\r\nsecond line";
+
+    hEdit = create_editcontrol(ES_AUTOHSCROLL | ES_AUTOVSCROLL, 0);
+    hMultilineEdit = create_editcontrol(ES_AUTOHSCROLL | ES_AUTOVSCROLL | ES_MULTILINE, 0);
+
+    /* Prepare clipboard data with simple text */
+    hmem = GlobalAlloc(GMEM_MOVEABLE, 255);
+    ok(hmem != NULL, "got %p (expected != NULL)\n", hmem);
+    buffer = GlobalLock(hmem);
+    ok(buffer != NULL, "got %p (expected != NULL)\n", buffer);
+    strcpy(buffer, str);
+    GlobalUnlock(hmem);
+
+    r = OpenClipboard(hEdit);
+    ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
+    r = EmptyClipboard();
+    ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
+    hmem_ret = SetClipboardData(CF_TEXT, hmem);
+    ok(hmem_ret == hmem, "expected %p, got %p\n", hmem, hmem_ret);
+    r = CloseClipboard();
+    ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
+
+    /* Paste single line */
+    SendMessageA(hEdit, WM_SETTEXT, 0, (LPARAM)"");
+    r = SendMessageA(hEdit, WM_PASTE, 0, 0);
+    len = SendMessageA(hEdit, WM_GETTEXTLENGTH, 0, 0);
+    ok(strlen(str) == len, "got %d\n", len);
+
+    /* Prepare clipboard data with multiline text */
+    hmem = GlobalAlloc(GMEM_MOVEABLE, 255);
+    ok(hmem != NULL, "got %p (expected != NULL)\n", hmem);
+    buffer = GlobalLock(hmem);
+    ok(buffer != NULL, "got %p (expected != NULL)\n", buffer);
+    strcpy(buffer, str2);
+    GlobalUnlock(hmem);
+
+    r = OpenClipboard(hEdit);
+    ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
+    r = EmptyClipboard();
+    ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
+    hmem_ret = SetClipboardData(CF_TEXT, hmem);
+    ok(hmem_ret == hmem, "expected %p, got %p\n", hmem, hmem_ret);
+    r = CloseClipboard();
+    ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
+
+    /* Paste multiline text in singleline edit - should be cut */
+    SendMessageA(hEdit, WM_SETTEXT, 0, (LPARAM)"");
+    r = SendMessageA(hEdit, WM_PASTE, 0, 0);
+    len = SendMessageA(hEdit, WM_GETTEXTLENGTH, 0, 0);
+    ok(strlen("first line") == len, "got %d\n", len);
+
+    /* Paste multiline text in multiline edit */
+    SendMessageA(hMultilineEdit, WM_SETTEXT, 0, (LPARAM)"");
+    r = SendMessageA(hMultilineEdit, WM_PASTE, 0, 0);
+    len = SendMessageA(hMultilineEdit, WM_GETTEXTLENGTH, 0, 0);
+    ok(strlen(str2) == len, "got %d\n", len);
+
+    /* Cleanup */
+    DestroyWindow(hEdit);
+    DestroyWindow(hMultilineEdit);
+}
+
+static void test_EM_GETLINE(void)
+{
+    HWND hwnd[2];
+    int i;
+
+    hwnd[0] = create_editcontrol(ES_AUTOHSCROLL | ES_AUTOVSCROLL, 0);
+    hwnd[1] = create_editcontrolW(ES_AUTOHSCROLL | ES_AUTOVSCROLL, 0);
+
+    for (i = 0; i < ARRAY_SIZE(hwnd); i++)
+    {
+        static const WCHAR strW[] = {'t','e','x','t',0};
+        static const char *str = "text";
+        WCHAR buffW[16];
+        char buff[16];
+        int r;
+
+        if (i == 0)
+            ok(!IsWindowUnicode(hwnd[i]), "Expected ansi window.\n");
+        else
+            ok(IsWindowUnicode(hwnd[i]), "Expected unicode window.\n");
+
+        SendMessageA(hwnd[i], WM_SETTEXT, 0, (LPARAM)str);
+
+        memset(buff, 0, sizeof(buff));
+        *(WORD *)buff = sizeof(buff);
+        r = SendMessageA(hwnd[i], EM_GETLINE, 0, (LPARAM)buff);
+        ok(r == strlen(str), "Failed to get a line %d.\n", r);
+        ok(!strcmp(buff, str), "Unexpected line data %s.\n", buff);
+
+        memset(buff, 0, sizeof(buff));
+        *(WORD *)buff = sizeof(buff);
+        r = SendMessageA(hwnd[i], EM_GETLINE, 1, (LPARAM)buff);
+        ok(r == strlen(str), "Failed to get a line %d.\n", r);
+        ok(!strcmp(buff, str), "Unexpected line data %s.\n", buff);
+
+        memset(buffW, 0, sizeof(buffW));
+        *(WORD *)buffW = ARRAY_SIZE(buffW);
+        r = SendMessageW(hwnd[i], EM_GETLINE, 0, (LPARAM)buffW);
+        ok(r == lstrlenW(strW), "Failed to get a line %d.\n", r);
+        ok(!lstrcmpW(buffW, strW), "Unexpected line data %s.\n", wine_dbgstr_w(buffW));
+
+        memset(buffW, 0, sizeof(buffW));
+        *(WORD *)buffW = ARRAY_SIZE(buffW);
+        r = SendMessageW(hwnd[i], EM_GETLINE, 1, (LPARAM)buffW);
+        ok(r == lstrlenW(strW), "Failed to get a line %d.\n", r);
+        ok(!lstrcmpW(buffW, strW), "Unexpected line data %s.\n", wine_dbgstr_w(buffW));
+
+        DestroyWindow(hwnd[i]);
+    }
+}
+
+static int CALLBACK test_wordbreak_procA(char *text, int current, int length, int code)
+{
+    return -1;
+}
+
+static void test_wordbreak_proc(void)
+{
+    EDITWORDBREAKPROCA proc;
+    LRESULT ret;
+    HWND hwnd;
+
+    hwnd = create_editcontrol(ES_AUTOHSCROLL | ES_AUTOVSCROLL, 0);
+
+    proc = (void *)SendMessageA(hwnd, EM_GETWORDBREAKPROC, 0, 0);
+    ok(proc == NULL, "Unexpected wordbreak proc %p.\n", proc);
+
+    ret = SendMessageA(hwnd, EM_SETWORDBREAKPROC, 0, (LPARAM)test_wordbreak_procA);
+    ok(ret == 1, "Unexpected return value %ld.\n", ret);
+
+    proc = (void *)SendMessageA(hwnd, EM_GETWORDBREAKPROC, 0, 0);
+    ok(proc == test_wordbreak_procA, "Unexpected wordbreak proc %p.\n", proc);
+
+    ret = SendMessageA(hwnd, EM_SETWORDBREAKPROC, 0, 0);
+    ok(ret == 1, "Unexpected return value %ld.\n", ret);
+
+    proc = (void *)SendMessageA(hwnd, EM_GETWORDBREAKPROC, 0, 0);
+    ok(proc == NULL, "Unexpected wordbreak proc %p.\n", proc);
+
+    DestroyWindow(hwnd);
+}
 
 START_TEST(edit)
 {
     BOOL b;
-
-    init_function_pointers();
 
     hinst = GetModuleHandleA(NULL);
     b = RegisterWindowClasses();
@@ -2865,12 +3262,11 @@ START_TEST(edit)
     test_child_edit_wmkeydown();
     test_fontsize();
     test_dialogmode();
-    if (pEndMenu)
-        test_contextmenu();
-    else
-        win_skip("EndMenu is not available\n");
-
+    test_contextmenu();
     test_EM_GETHANDLE();
+    test_paste();
+    test_EM_GETLINE();
+    test_wordbreak_proc();
 
     UnregisterWindowClasses();
 }

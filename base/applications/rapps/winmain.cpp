@@ -15,10 +15,7 @@
 
 HWND hMainWnd;
 HINSTANCE hInst;
-INT SelectedEnumType = ENUM_ALL_INSTALLED;
 SETTINGS_INFO SettingsInfo;
-
-ATL::CStringW szSearchPattern;
 
 class CRAppsModule : public CComModule
 {
@@ -51,7 +48,8 @@ VOID FillDefaultSettings(PSETTINGS_INFO pSettingsInfo)
     pSettingsInfo->bSaveWndPos = TRUE;
     pSettingsInfo->bUpdateAtStart = FALSE;
     pSettingsInfo->bLogEnabled = TRUE;
-
+    pSettingsInfo->bUseSource = FALSE;
+    
     if (FAILED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, szDownloadDir.GetBuffer(MAX_PATH))))
     {
         szDownloadDir.ReleaseBuffer();
@@ -65,7 +63,9 @@ VOID FillDefaultSettings(PSETTINGS_INFO pSettingsInfo)
         szDownloadDir.ReleaseBuffer();
     }
 
-    szDownloadDir += L"\\RAPPS Downloads";
+    PathAppendW(szDownloadDir.GetBuffer(MAX_PATH), L"\\RAPPS Downloads");
+    szDownloadDir.ReleaseBuffer();
+	
     ATL::CStringW::CopyChars(pSettingsInfo->szDownloadDir,
                              _countof(pSettingsInfo->szDownloadDir),
                              szDownloadDir.GetString(),
@@ -126,8 +126,6 @@ INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 {
     LPCWSTR szWindowClass = L"ROSAPPMGR";
     HANDLE hMutex;
-    HACCEL KeyBrd;
-    MSG Msg;
     BOOL bIsFirstLaunch;
 
     InitializeAtlModule(hInstance, TRUE);
@@ -160,32 +158,12 @@ INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     InitCommonControls();
 
     // skip window creation if there were some keys
-    if (!UseCmdParameters(lpCmdLine))
+    if (!UseCmdParameters(GetCommandLineW()))
     {
         if (SettingsInfo.bUpdateAtStart || bIsFirstLaunch)
             CAvailableApps::ForceUpdateAppsDB();
 
-        hMainWnd = CreateMainWindow();
-
-        if (hMainWnd)
-        {
-            /* Maximize it if we must */
-            ShowWindow(hMainWnd, ((SettingsInfo.bSaveWndPos && SettingsInfo.Maximized) ? SW_MAXIMIZE : nShowCmd));
-            UpdateWindow(hMainWnd);
-
-            /* Load the menu hotkeys */
-            KeyBrd = LoadAcceleratorsW(NULL, MAKEINTRESOURCEW(HOTKEYS));
-
-            /* Message Loop */
-            while (GetMessageW(&Msg, NULL, 0, 0))
-            {
-                if (!TranslateAcceleratorW(hMainWnd, KeyBrd, &Msg))
-                {
-                    TranslateMessage(&Msg);
-                    DispatchMessageW(&Msg);
-                }
-            }
-        }
+        ShowMainWindow(nShowCmd);
     }
 
     if (hMutex)

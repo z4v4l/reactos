@@ -332,12 +332,12 @@ MmFreeMemoryArea(
                 if (MiQueryPageTableReferences((PVOID)Address) == 0)
                 {
                     /* No PTE relies on this PDE. Release it */
-                    KIRQL OldIrql = KeAcquireQueuedSpinLock(LockQueuePfnLock);
+                    KIRQL OldIrql = MiAcquirePfnLock();
                     PMMPDE PointerPde = MiAddressToPde(Address);
                     ASSERT(PointerPde->u.Hard.Valid == 1);
                     MiDeletePte(PointerPde, MiPdeToPte(PointerPde), Process, NULL);
                     ASSERT(PointerPde->u.Hard.Valid == 0);
-                    KeReleaseQueuedSpinLock(LockQueuePfnLock, OldIrql);
+                    MiReleasePfnLock(OldIrql);
                 }
             }
 #endif
@@ -375,7 +375,7 @@ MmFreeMemoryArea(
 #endif
     ExFreePoolWithTag(MemoryArea, TAG_MAREA);
 
-    DPRINT("MmFreeMemoryAreaByNode() succeeded\n");
+    DPRINT("MmFreeMemoryArea() succeeded\n");
 
     return STATUS_SUCCESS;
 }
@@ -570,8 +570,10 @@ NTSTATUS
 NTAPI
 MmDeleteProcessAddressSpace(PEPROCESS Process)
 {
+#ifndef _M_AMD64
     KIRQL OldIrql;
     PVOID Address;
+#endif
 
     DPRINT("MmDeleteProcessAddressSpace(Process %p (%s))\n", Process,
            Process->ImageFileName);
@@ -594,11 +596,11 @@ MmDeleteProcessAddressSpace(PEPROCESS Process)
         KeAttachProcess(&Process->Pcb);
 
         /* Acquire PFN lock */
-        OldIrql = KeAcquireQueuedSpinLock(LockQueuePfnLock);
+        OldIrql = MiAcquirePfnLock();
 
         for (Address = MI_LOWEST_VAD_ADDRESS;
-                Address < MM_HIGHEST_VAD_ADDRESS;
-                Address =(PVOID)((ULONG_PTR)Address + (PAGE_SIZE * PTE_COUNT)))
+             Address < MM_HIGHEST_VAD_ADDRESS;
+             Address = (PVOID)((ULONG_PTR)Address + (PTE_PER_PAGE * PAGE_SIZE)))
         {
             /* At this point all references should be dead */
             if (MiQueryPageTableReferences(Address) != 0)
@@ -619,7 +621,7 @@ MmDeleteProcessAddressSpace(PEPROCESS Process)
         }
 
         /* Release lock */
-        KeReleaseQueuedSpinLock(LockQueuePfnLock, OldIrql);
+        MiReleasePfnLock(OldIrql);
 
         /* Detach */
         KeDetachProcess();

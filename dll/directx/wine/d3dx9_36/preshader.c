@@ -16,13 +16,21 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "d3dx9_36_private.h"
+#include "config.h"
+#include "wine/port.h"
 
+#include "d3dx9_private.h"
+
+#include <float.h>
 #include <assert.h>
 
+WINE_DEFAULT_DEBUG_CHANNEL(d3dx);
+
+#ifdef __REACTOS__
 /* ReactOS FIXME: Insect */
 #define fmin min
 #define fmax max
+#endif
 
 enum pres_ops
 {
@@ -537,6 +545,8 @@ static HRESULT get_ctab_constant_desc(ID3DXConstantTable *ctab, D3DXHANDLE hc, D
     if (!constant)
     {
         FIXME("Could not get constant desc.\n");
+        if (constantinfo_reserved)
+            *constantinfo_reserved = 0;
         return D3DERR_INVALIDCALL;
     }
     *desc = constant->desc;
@@ -1205,7 +1215,8 @@ static HRESULT parse_preshader(struct d3dx_preshader *pres, unsigned int *ptr, u
             }
             if (reg_idx >= pres->regs.table_sizes[table])
             {
-                FIXME("Out of bounds register index, i %u, j %u, table %u, reg_idx %u.\n",
+                /* Native accepts these broken preshaders. */
+                FIXME("Out of bounds register index, i %u, j %u, table %u, reg_idx %u, preshader parsing failed.\n",
                         i, j, table, reg_idx);
                 return D3DXERR_INVALIDDATA;
             }

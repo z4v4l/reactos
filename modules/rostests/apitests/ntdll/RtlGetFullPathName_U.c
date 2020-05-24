@@ -5,10 +5,7 @@
  * PROGRAMMER:      Thomas Faber <thomas.faber@reactos.org>
  */
 
-#include <apitest.h>
-
-#define WIN32_NO_STATUS
-#include <ndk/rtlfuncs.h>
+#include "precomp.h"
 
 /*
 ULONG
@@ -90,6 +87,7 @@ RunTestCases(VOID)
     /* TODO: Drive Relative tests don't work yet if the current drive isn't C: */
     struct
     {
+        ULONG Line;
         PCWSTR FileName;
         PREFIX_TYPE PrefixType;
         PCWSTR FullPathName;
@@ -97,35 +95,35 @@ RunTestCases(VOID)
         SIZE_T FilePartSize;
     } TestCases[] =
     {
-        { L"C:",                 PrefixCurrentPath, L"", PrefixCurrentPathWithoutLastPart },
-        { L"C:\\",               PrefixNone, L"C:\\" },
-        { L"C:\\test",           PrefixNone, L"C:\\test", PrefixCurrentDrive },
-        { L"C:\\test\\",         PrefixNone, L"C:\\test\\" },
-        { L"C:/test/",           PrefixNone, L"C:\\test\\" },
+//        { __LINE__, L"C:",                 PrefixCurrentPath, L"", PrefixCurrentPathWithoutLastPart },
+        { __LINE__, L"C:\\",               PrefixNone, L"C:\\" },
+        { __LINE__, L"C:\\test",           PrefixNone, L"C:\\test", PrefixCurrentDrive },
+        { __LINE__, L"C:\\test\\",         PrefixNone, L"C:\\test\\" },
+        { __LINE__, L"C:/test/",           PrefixNone, L"C:\\test\\" },
 
-        { L"C:\\\\test",         PrefixNone, L"C:\\test", PrefixCurrentDrive },
-        { L"test",               PrefixCurrentPath, L"\\test", PrefixCurrentPath, sizeof(WCHAR) },
-        { L"\\test",             PrefixCurrentDrive, L"test", PrefixCurrentDrive },
-        { L"/test",              PrefixCurrentDrive, L"test", PrefixCurrentDrive },
-        { L".\\test",            PrefixCurrentPath, L"\\test", PrefixCurrentPath, sizeof(WCHAR) },
+        { __LINE__, L"C:\\\\test",         PrefixNone, L"C:\\test", PrefixCurrentDrive },
+        { __LINE__, L"test",               PrefixCurrentPath, L"\\test", PrefixCurrentPath, sizeof(WCHAR) },
+        { __LINE__, L"\\test",             PrefixCurrentDrive, L"test", PrefixCurrentDrive },
+        { __LINE__, L"/test",              PrefixCurrentDrive, L"test", PrefixCurrentDrive },
+        { __LINE__, L".\\test",            PrefixCurrentPath, L"\\test", PrefixCurrentPath, sizeof(WCHAR) },
 
-        { L"\\.",                PrefixCurrentDrive, L"" },
-        { L"\\.\\",              PrefixCurrentDrive, L"" },
-        { L"\\\\.",              PrefixNone, L"\\\\.\\" },
-        { L"\\\\.\\",            PrefixNone, L"\\\\.\\" },
-        { L"\\\\.\\Something\\", PrefixNone, L"\\\\.\\Something\\" },
+        { __LINE__, L"\\.",                PrefixCurrentDrive, L"" },
+        { __LINE__, L"\\.\\",              PrefixCurrentDrive, L"" },
+        { __LINE__, L"\\\\.",              PrefixNone, L"\\\\.\\" },
+        { __LINE__, L"\\\\.\\",            PrefixNone, L"\\\\.\\" },
+        { __LINE__, L"\\\\.\\Something\\", PrefixNone, L"\\\\.\\Something\\" },
 
-        { L"\\??\\",             PrefixCurrentDrive, L"??\\" },
-        { L"\\??\\C:",           PrefixCurrentDrive, L"??\\C:", PrefixCurrentDrive, 3 * sizeof(WCHAR) },
-        { L"\\??\\C:\\",         PrefixCurrentDrive, L"??\\C:\\" },
-        { L"\\??\\C:\\test",     PrefixCurrentDrive, L"??\\C:\\test", PrefixCurrentDrive, 6 * sizeof(WCHAR) },
-        { L"\\??\\C:\\test\\",   PrefixCurrentDrive, L"??\\C:\\test\\" },
+        { __LINE__, L"\\??\\",             PrefixCurrentDrive, L"??\\" },
+        { __LINE__, L"\\??\\C:",           PrefixCurrentDrive, L"??\\C:", PrefixCurrentDrive, 3 * sizeof(WCHAR) },
+        { __LINE__, L"\\??\\C:\\",         PrefixCurrentDrive, L"??\\C:\\" },
+        { __LINE__, L"\\??\\C:\\test",     PrefixCurrentDrive, L"??\\C:\\test", PrefixCurrentDrive, 6 * sizeof(WCHAR) },
+        { __LINE__, L"\\??\\C:\\test\\",   PrefixCurrentDrive, L"??\\C:\\test\\" },
 
-        { L"\\\\??\\",           PrefixNone, L"\\\\??\\" },
-        { L"\\\\??\\C:",         PrefixNone, L"\\\\??\\C:" },
-        { L"\\\\??\\C:\\",       PrefixNone, L"\\\\??\\C:\\" },
-        { L"\\\\??\\C:\\test",   PrefixNone, L"\\\\??\\C:\\test", PrefixNone, sizeof(L"\\\\??\\C:\\") },
-        { L"\\\\??\\C:\\test\\", PrefixNone, L"\\\\??\\C:\\test\\" },
+        { __LINE__, L"\\\\??\\",           PrefixNone, L"\\\\??\\" },
+        { __LINE__, L"\\\\??\\C:",         PrefixNone, L"\\\\??\\C:" },
+        { __LINE__, L"\\\\??\\C:\\",       PrefixNone, L"\\\\??\\C:\\" },
+        { __LINE__, L"\\\\??\\C:\\test",   PrefixNone, L"\\\\??\\C:\\test", PrefixNone, sizeof(L"\\\\??\\C:\\") },
+        { __LINE__, L"\\\\??\\C:\\test\\", PrefixNone, L"\\\\??\\C:\\test\\" },
     };
     WCHAR FullPathNameBuffer[MAX_PATH];
     PWSTR ShortName;
@@ -169,7 +167,7 @@ RunTestCases(VOID)
         EndSeh(STATUS_SUCCESS);
 
         Okay = CheckStringBuffer(FullPathNameBuffer, Length, sizeof(FullPathNameBuffer), ExpectedPathName);
-        ok(Okay, "Wrong path name '%S', expected '%S'\n", FullPathNameBuffer, ExpectedPathName);
+        ok(Okay, "Line %lu: Wrong path name '%S', expected '%S'\n", TestCases[i].Line, FullPathNameBuffer, ExpectedPathName);
 
         if (!ShortName)
             FilePartSize = 0;
@@ -202,7 +200,7 @@ RunTestCases(VOID)
                     if (BackSlash)
                         ExpectedFilePartSize -= wcslen(BackSlash + 1) * sizeof(WCHAR);
                     else
-                        ok(0, "GetCurrentDirectory returned %S\n", CurrentPath);
+                        ok(0, "Line %lu: GetCurrentDirectory returned %S\n", TestCases[i].Line, CurrentPath);
                 }
                 break;
             }
@@ -214,7 +212,7 @@ RunTestCases(VOID)
         if (ExpectedFilePartSize != 0)
             ExpectedFilePartSize = (ExpectedFilePartSize - sizeof(UNICODE_NULL)) / sizeof(WCHAR);
         ok(FilePartSize == ExpectedFilePartSize,
-            "FilePartSize = %lu, expected %lu\n", (ULONG)FilePartSize, (ULONG)ExpectedFilePartSize);
+            "Line %lu: FilePartSize = %lu, expected %lu\n", TestCases[i].Line, (ULONG)FilePartSize, (ULONG)ExpectedFilePartSize);
     }
 }
 

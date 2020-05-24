@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2017, Intel Corp.
+ * Copyright (C) 2000 - 2020, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,12 +49,6 @@
 
 #define _COMPONENT          ACPI_EVENTS
         ACPI_MODULE_NAME    ("evrgnini")
-
-/* Local prototypes */
-
-static BOOLEAN
-AcpiEvIsPciRootBridge (
-    ACPI_NAMESPACE_NODE     *Node);
 
 
 /*******************************************************************************
@@ -261,7 +255,6 @@ AcpiEvPciConfigRegionSetup (
                          * root bridge. Still need to return a context object
                          * for the new PCI_Config operation region, however.
                          */
-                        Status = AE_OK;
                     }
                     else
                     {
@@ -382,7 +375,7 @@ AcpiEvPciConfigRegionSetup (
  *
  ******************************************************************************/
 
-static BOOLEAN
+BOOLEAN
 AcpiEvIsPciRootBridge (
     ACPI_NAMESPACE_NODE     *Node)
 {
@@ -620,21 +613,6 @@ AcpiEvInitializeRegion (
             case ACPI_TYPE_THERMAL:
 
                 HandlerObj = ObjDesc->CommonNotify.Handler;
-                break;
-
-            case ACPI_TYPE_METHOD:
-                /*
-                 * If we are executing module level code, the original
-                 * Node's object was replaced by this Method object and we
-                 * saved the handler in the method object.
-                 *
-                 * See AcpiNsExecModuleCode
-                 */
-                if (!AcpiGbl_ParseTableAsTermList &&
-                    ObjDesc->Method.InfoFlags & ACPI_METHOD_MODULE_LEVEL)
-                {
-                    HandlerObj = ObjDesc->Method.Dispatch.Handler;
-                }
                 break;
 
             default:

@@ -21,11 +21,14 @@
 
 #include "d3drm_private.h"
 
-static D3DRMMATRIX4D identity = {
-    { 1.0f, 0.0f, 0.0f, 0.0f },
-    { 0.0f, 1.0f, 0.0f, 0.0f },
-    { 0.0f, 0.0f, 1.0f, 0.0f },
-    { 0.0f, 0.0f, 0.0f, 1.0f }
+WINE_DEFAULT_DEBUG_CHANNEL(d3drm);
+
+static const struct d3drm_matrix identity =
+{
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f,
 };
 
 struct d3drm_frame_array
@@ -67,8 +70,6 @@ static inline struct d3drm_frame *impl_from_IDirect3DRMFrame3(IDirect3DRMFrame3 
     return CONTAINING_RECORD(iface, struct d3drm_frame, IDirect3DRMFrame3_iface);
 }
 
-static inline struct d3drm_frame *unsafe_impl_from_IDirect3DRMFrame3(IDirect3DRMFrame3 *iface);
-
 static inline struct d3drm_frame_array *impl_from_IDirect3DRMFrameArray(IDirect3DRMFrameArray *iface)
 {
     return CONTAINING_RECORD(iface, struct d3drm_frame_array, IDirect3DRMFrameArray_iface);
@@ -92,6 +93,75 @@ static inline struct d3drm_animation *impl_from_IDirect3DRMAnimation(IDirect3DRM
 static inline struct d3drm_animation *impl_from_IDirect3DRMAnimation2(IDirect3DRMAnimation2 *iface)
 {
     return CONTAINING_RECORD(iface, struct d3drm_animation, IDirect3DRMAnimation2_iface);
+}
+
+static void d3drm_matrix_multiply_affine(struct d3drm_matrix *dst,
+        const struct d3drm_matrix *src1, const struct d3drm_matrix *src2)
+{
+    struct d3drm_matrix tmp;
+
+    tmp._11 = src1->_11 * src2->_11 + src1->_12 * src2->_21 + src1->_13 * src2->_31;
+    tmp._12 = src1->_11 * src2->_12 + src1->_12 * src2->_22 + src1->_13 * src2->_32;
+    tmp._13 = src1->_11 * src2->_13 + src1->_12 * src2->_23 + src1->_13 * src2->_33;
+    tmp._14 = 0.0f;
+
+    tmp._21 = src1->_21 * src2->_11 + src1->_22 * src2->_21 + src1->_23 * src2->_31;
+    tmp._22 = src1->_21 * src2->_12 + src1->_22 * src2->_22 + src1->_23 * src2->_32;
+    tmp._23 = src1->_21 * src2->_13 + src1->_22 * src2->_23 + src1->_23 * src2->_33;
+    tmp._24 = 0.0f;
+
+    tmp._31 = src1->_31 * src2->_11 + src1->_32 * src2->_21 + src1->_33 * src2->_31;
+    tmp._32 = src1->_31 * src2->_12 + src1->_32 * src2->_22 + src1->_33 * src2->_32;
+    tmp._33 = src1->_31 * src2->_13 + src1->_32 * src2->_23 + src1->_33 * src2->_33;
+    tmp._34 = 0.0f;
+
+    tmp._41 = src1->_41 * src2->_11 + src1->_42 * src2->_21 + src1->_43 * src2->_31 + src2->_41;
+    tmp._42 = src1->_41 * src2->_12 + src1->_42 * src2->_22 + src1->_43 * src2->_32 + src2->_42;
+    tmp._43 = src1->_41 * src2->_13 + src1->_42 * src2->_23 + src1->_43 * src2->_33 + src2->_43;
+    tmp._44 = 1.0f;
+
+    *dst = tmp;
+}
+
+static void d3drm_matrix_set_rotation(struct d3drm_matrix *matrix, D3DVECTOR *axis, float theta)
+{
+    float sin_theta, cos_theta, vers_theta;
+
+    D3DRMVectorNormalize(axis);
+    sin_theta = sinf(theta);
+    cos_theta = cosf(theta);
+    vers_theta = 1.0f - cos_theta;
+
+    matrix->_11 = vers_theta * axis->u1.x * axis->u1.x + cos_theta;
+    matrix->_21 = vers_theta * axis->u1.x * axis->u2.y - sin_theta * axis->u3.z;
+    matrix->_31 = vers_theta * axis->u1.x * axis->u3.z + sin_theta * axis->u2.y;
+    matrix->_41 = 0.0f;
+
+    matrix->_12 = vers_theta * axis->u2.y * axis->u1.x + sin_theta * axis->u3.z;
+    matrix->_22 = vers_theta * axis->u2.y * axis->u2.y + cos_theta;
+    matrix->_32 = vers_theta * axis->u2.y * axis->u3.z - sin_theta * axis->u1.x;
+    matrix->_42 = 0.0f;
+
+    matrix->_13 = vers_theta * axis->u3.z * axis->u1.x - sin_theta * axis->u2.y;
+    matrix->_23 = vers_theta * axis->u3.z * axis->u2.y + sin_theta * axis->u1.x;
+    matrix->_33 = vers_theta * axis->u3.z * axis->u3.z + cos_theta;
+    matrix->_43 = 0.0f;
+
+    matrix->_14 = 0.0f;
+    matrix->_24 = 0.0f;
+    matrix->_34 = 0.0f;
+    matrix->_44 = 1.0f;
+}
+
+static void d3drm_vector_transform_affine(D3DVECTOR *dst, const D3DVECTOR *v, const struct d3drm_matrix *m)
+{
+    D3DVECTOR tmp;
+
+    tmp.u1.x = v->u1.x * m->_11 + v->u2.y * m->_21 + v->u3.z * m->_31 + m->_41;
+    tmp.u2.y = v->u1.x * m->_12 + v->u2.y * m->_22 + v->u3.z * m->_32 + m->_42;
+    tmp.u3.z = v->u1.x * m->_13 + v->u2.y * m->_23 + v->u3.z * m->_33 + m->_43;
+
+    *dst = tmp;
 }
 
 static HRESULT WINAPI d3drm_frame_array_QueryInterface(IDirect3DRMFrameArray *iface, REFIID riid, void **out)
@@ -136,8 +206,8 @@ static ULONG WINAPI d3drm_frame_array_Release(IDirect3DRMFrameArray *iface)
         {
             IDirect3DRMFrame_Release(array->frames[i]);
         }
-        HeapFree(GetProcessHeap(), 0, array->frames);
-        HeapFree(GetProcessHeap(), 0, array);
+        heap_free(array->frames);
+        heap_free(array);
     }
 
     return refcount;
@@ -188,7 +258,7 @@ static struct d3drm_frame_array *d3drm_frame_array_create(unsigned int frame_cou
     struct d3drm_frame_array *array;
     unsigned int i;
 
-    if (!(array = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*array))))
+    if (!(array = heap_alloc_zero(sizeof(*array))))
         return NULL;
 
     array->IDirect3DRMFrameArray_iface.lpVtbl = &d3drm_frame_array_vtbl;
@@ -197,9 +267,9 @@ static struct d3drm_frame_array *d3drm_frame_array_create(unsigned int frame_cou
 
     if (frame_count)
     {
-        if (!(array->frames = HeapAlloc(GetProcessHeap(), 0, frame_count * sizeof(*array->frames))))
+        if (!(array->frames = heap_calloc(frame_count, sizeof(*array->frames))))
         {
-            HeapFree(GetProcessHeap(), 0, array);
+            heap_free(array);
             return NULL;
         }
 
@@ -254,8 +324,8 @@ static ULONG WINAPI d3drm_visual_array_Release(IDirect3DRMVisualArray *iface)
         {
             IDirect3DRMVisual_Release(array->visuals[i]);
         }
-        HeapFree(GetProcessHeap(), 0, array->visuals);
-        HeapFree(GetProcessHeap(), 0, array);
+        heap_free(array->visuals);
+        heap_free(array);
     }
 
     return refcount;
@@ -306,7 +376,7 @@ static struct d3drm_visual_array *d3drm_visual_array_create(unsigned int visual_
     struct d3drm_visual_array *array;
     unsigned int i;
 
-    if (!(array = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*array))))
+    if (!(array = heap_alloc_zero(sizeof(*array))))
         return NULL;
 
     array->IDirect3DRMVisualArray_iface.lpVtbl = &d3drm_visual_array_vtbl;
@@ -315,9 +385,9 @@ static struct d3drm_visual_array *d3drm_visual_array_create(unsigned int visual_
 
     if (visual_count)
     {
-        if (!(array->visuals = HeapAlloc(GetProcessHeap(), 0, visual_count * sizeof(*array->visuals))))
+        if (!(array->visuals = heap_calloc(visual_count, sizeof(*array->visuals))))
         {
-            HeapFree(GetProcessHeap(), 0, array);
+            heap_free(array);
             return NULL;
         }
 
@@ -373,8 +443,8 @@ static ULONG WINAPI d3drm_light_array_Release(IDirect3DRMLightArray *iface)
         {
             IDirect3DRMLight_Release(array->lights[i]);
         }
-        HeapFree(GetProcessHeap(), 0, array->lights);
-        HeapFree(GetProcessHeap(), 0, array);
+        heap_free(array->lights);
+        heap_free(array);
     }
 
     return refcount;
@@ -425,7 +495,7 @@ static struct d3drm_light_array *d3drm_light_array_create(unsigned int light_cou
     struct d3drm_light_array *array;
     unsigned int i;
 
-    if (!(array = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*array))))
+    if (!(array = heap_alloc_zero(sizeof(*array))))
         return NULL;
 
     array->IDirect3DRMLightArray_iface.lpVtbl = &d3drm_light_array_vtbl;
@@ -434,9 +504,9 @@ static struct d3drm_light_array *d3drm_light_array_create(unsigned int light_cou
 
     if (light_count)
     {
-        if (!(array->lights = HeapAlloc(GetProcessHeap(), 0, light_count * sizeof(*array->lights))))
+        if (!(array->lights = heap_calloc(light_count, sizeof(*array->lights))))
         {
-            HeapFree(GetProcessHeap(), 0, array);
+            heap_free(array);
             return NULL;
         }
 
@@ -543,19 +613,19 @@ static ULONG WINAPI d3drm_frame3_Release(IDirect3DRMFrame3 *iface)
         {
             IDirect3DRMFrame3_Release(frame->children[i]);
         }
-        HeapFree(GetProcessHeap(), 0, frame->children);
+        heap_free(frame->children);
         for (i = 0; i < frame->nb_visuals; ++i)
         {
             IDirect3DRMVisual_Release(frame->visuals[i]);
         }
-        HeapFree(GetProcessHeap(), 0, frame->visuals);
+        heap_free(frame->visuals);
         for (i = 0; i < frame->nb_lights; ++i)
         {
             IDirect3DRMLight_Release(frame->lights[i]);
         }
-        HeapFree(GetProcessHeap(), 0, frame->lights);
+        heap_free(frame->lights);
         IDirect3DRM_Release(frame->d3drm);
-        HeapFree(GetProcessHeap(), 0, frame);
+        heap_free(frame);
     }
 
     return refcount;
@@ -939,25 +1009,29 @@ static HRESULT WINAPI d3drm_frame3_AddTransform(IDirect3DRMFrame3 *iface,
         D3DRMCOMBINETYPE type, D3DRMMATRIX4D matrix)
 {
     struct d3drm_frame *frame = impl_from_IDirect3DRMFrame3(iface);
+    const struct d3drm_matrix *m = d3drm_matrix(matrix);
 
     TRACE("iface %p, type %#x, matrix %p.\n", iface, type, matrix);
+
+    if (m->_14 != 0.0f || m->_24 != 0.0f || m->_34 != 0.0f || m->_44 != 1.0f)
+        return D3DRMERR_BADVALUE;
 
     switch (type)
     {
         case D3DRMCOMBINE_REPLACE:
-            memcpy(frame->transform, matrix, sizeof(D3DRMMATRIX4D));
+            frame->transform = *m;
             break;
 
         case D3DRMCOMBINE_BEFORE:
-            FIXME("D3DRMCOMBINE_BEFORE not supported yet\n");
+            d3drm_matrix_multiply_affine(&frame->transform, m, &frame->transform);
             break;
 
         case D3DRMCOMBINE_AFTER:
-            FIXME("D3DRMCOMBINE_AFTER not supported yet\n");
+            d3drm_matrix_multiply_affine(&frame->transform, &frame->transform, m);
             break;
 
         default:
-            WARN("Unknown Combine Type %u\n", type);
+            FIXME("Unhandled type %#x.\n", type);
             return D3DRMERR_BADVALUE;
     }
 
@@ -987,74 +1061,185 @@ static HRESULT WINAPI d3drm_frame1_AddTransform(IDirect3DRMFrame *iface,
 static HRESULT WINAPI d3drm_frame3_AddTranslation(IDirect3DRMFrame3 *iface,
         D3DRMCOMBINETYPE type, D3DVALUE x, D3DVALUE y, D3DVALUE z)
 {
-    FIXME("iface %p, type %#x, x %.8e, y %.8e, z %.8e stub!\n", iface, type, x, y, z);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame3(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, x %.8e, y %.8e, z %.8e.\n", iface, type, x, y, z);
+
+    switch (type)
+    {
+        case D3DRMCOMBINE_REPLACE:
+            frame->transform = identity;
+            frame->transform._41 = x;
+            frame->transform._42 = y;
+            frame->transform._43 = z;
+            break;
+
+        case D3DRMCOMBINE_BEFORE:
+            frame->transform._41 += x * frame->transform._11 + y * frame->transform._21 + z * frame->transform._31;
+            frame->transform._42 += x * frame->transform._12 + y * frame->transform._22 + z * frame->transform._32;
+            frame->transform._43 += x * frame->transform._13 + y * frame->transform._23 + z * frame->transform._33;
+            break;
+
+        case D3DRMCOMBINE_AFTER:
+            frame->transform._41 += x;
+            frame->transform._42 += y;
+            frame->transform._43 += z;
+            break;
+
+        default:
+            FIXME("Unhandled type %#x.\n", type);
+            return D3DRMERR_BADVALUE;
+    }
+
+    return D3DRM_OK;
 }
 
 static HRESULT WINAPI d3drm_frame2_AddTranslation(IDirect3DRMFrame2 *iface,
         D3DRMCOMBINETYPE type, D3DVALUE x, D3DVALUE y, D3DVALUE z)
 {
-    FIXME("iface %p, type %#x, x %.8e, y %.8e, z %.8e stub!\n", iface, type, x, y, z);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame2(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, x %.8e, y %.8e, z %.8e.\n", iface, type, x, y, z);
+
+    return d3drm_frame3_AddTranslation(&frame->IDirect3DRMFrame3_iface, type, x, y, z);
 }
 
 static HRESULT WINAPI d3drm_frame1_AddTranslation(IDirect3DRMFrame *iface,
         D3DRMCOMBINETYPE type, D3DVALUE x, D3DVALUE y, D3DVALUE z)
 {
-    FIXME("iface %p, type %#x, x %.8e, y %.8e, z %.8e stub!\n", iface, type, x, y, z);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, x %.8e, y %.8e, z %.8e.\n", iface, type, x, y, z);
+
+    return d3drm_frame3_AddTranslation(&frame->IDirect3DRMFrame3_iface, type, x, y, z);
 }
 
 static HRESULT WINAPI d3drm_frame3_AddScale(IDirect3DRMFrame3 *iface,
         D3DRMCOMBINETYPE type, D3DVALUE sx, D3DVALUE sy, D3DVALUE sz)
 {
-    FIXME("iface %p, type %#x, sx %.8e, sy %.8e, sz %.8e stub!\n", iface, type, sx, sy, sz);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame3(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, sx %.8e, sy %.8e, sz %.8e.\n", iface, type, sx, sy, sz);
+
+    switch (type)
+    {
+        case D3DRMCOMBINE_REPLACE:
+            frame->transform = identity;
+            frame->transform._11 = sx;
+            frame->transform._22 = sy;
+            frame->transform._33 = sz;
+            break;
+
+        case D3DRMCOMBINE_BEFORE:
+            frame->transform._11 *= sx;
+            frame->transform._12 *= sx;
+            frame->transform._13 *= sx;
+            frame->transform._21 *= sy;
+            frame->transform._22 *= sy;
+            frame->transform._23 *= sy;
+            frame->transform._31 *= sz;
+            frame->transform._32 *= sz;
+            frame->transform._33 *= sz;
+            break;
+
+        case D3DRMCOMBINE_AFTER:
+            frame->transform._11 *= sx;
+            frame->transform._12 *= sy;
+            frame->transform._13 *= sz;
+            frame->transform._21 *= sx;
+            frame->transform._22 *= sy;
+            frame->transform._23 *= sz;
+            frame->transform._31 *= sx;
+            frame->transform._32 *= sy;
+            frame->transform._33 *= sz;
+            frame->transform._41 *= sx;
+            frame->transform._42 *= sy;
+            frame->transform._43 *= sz;
+            break;
+
+        default:
+            FIXME("Unhandled type %#x.\n", type);
+            return D3DRMERR_BADVALUE;
+    }
+
+    return D3DRM_OK;
 }
 
 static HRESULT WINAPI d3drm_frame2_AddScale(IDirect3DRMFrame2 *iface,
         D3DRMCOMBINETYPE type, D3DVALUE sx, D3DVALUE sy, D3DVALUE sz)
 {
-    FIXME("iface %p, type %#x, sx %.8e, sy %.8e, sz %.8e stub!\n", iface, type, sx, sy, sz);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame2(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, sx %.8e, sy %.8e, sz %.8e.\n", iface, type, sx, sy, sz);
+
+    return d3drm_frame3_AddScale(&frame->IDirect3DRMFrame3_iface, type, sx, sy, sz);
 }
 
 static HRESULT WINAPI d3drm_frame1_AddScale(IDirect3DRMFrame *iface,
         D3DRMCOMBINETYPE type, D3DVALUE sx, D3DVALUE sy, D3DVALUE sz)
 {
-    FIXME("iface %p, type %#x, sx %.8e, sy %.8e, sz %.8e stub!\n", iface, type, sx, sy, sz);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, sx %.8e, sy %.8e, sz %.8e.\n", iface, type, sx, sy, sz);
+
+    return d3drm_frame3_AddScale(&frame->IDirect3DRMFrame3_iface, type, sx, sy, sz);
 }
 
 static HRESULT WINAPI d3drm_frame3_AddRotation(IDirect3DRMFrame3 *iface,
         D3DRMCOMBINETYPE type, D3DVALUE x, D3DVALUE y, D3DVALUE z, D3DVALUE theta)
 {
-    FIXME("iface %p, type %#x, x %.8e, y %.8e, z %.8e, theta %.8e stub!\n",
-            iface, type, x, y, z, theta);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame3(iface);
+    struct d3drm_matrix m;
+    D3DVECTOR axis;
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, x %.8e, y %.8e, z %.8e, theta %.8e.\n", iface, type, x, y, z, theta);
+
+    axis.u1.x = x;
+    axis.u2.y = y;
+    axis.u3.z = z;
+
+    switch (type)
+    {
+        case D3DRMCOMBINE_REPLACE:
+            d3drm_matrix_set_rotation(&frame->transform, &axis, theta);
+            break;
+
+        case D3DRMCOMBINE_BEFORE:
+            d3drm_matrix_set_rotation(&m, &axis, theta);
+            d3drm_matrix_multiply_affine(&frame->transform, &m, &frame->transform);
+            break;
+
+        case D3DRMCOMBINE_AFTER:
+            d3drm_matrix_set_rotation(&m, &axis, theta);
+            d3drm_matrix_multiply_affine(&frame->transform, &frame->transform, &m);
+            break;
+
+        default:
+            FIXME("Unhandled type %#x.\n", type);
+            return D3DRMERR_BADVALUE;
+    }
+
+    return D3DRM_OK;
 }
 
 static HRESULT WINAPI d3drm_frame2_AddRotation(IDirect3DRMFrame2 *iface,
         D3DRMCOMBINETYPE type, D3DVALUE x, D3DVALUE y, D3DVALUE z, D3DVALUE theta)
 {
-    FIXME("iface %p, type %#x, x %.8e, y %.8e, z %.8e, theta %.8e stub!\n", iface, type, x, y, z, theta);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame2(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, x %.8e, y %.8e, z %.8e, theta %.8e.\n", iface, type, x, y, z, theta);
+
+    return d3drm_frame3_AddRotation(&frame->IDirect3DRMFrame3_iface, type, x, y, z, theta);
 }
 
 static HRESULT WINAPI d3drm_frame1_AddRotation(IDirect3DRMFrame *iface,
         D3DRMCOMBINETYPE type, D3DVALUE x, D3DVALUE y, D3DVALUE z, D3DVALUE theta)
 {
-    FIXME("iface %p, type %#x, x %.8e, y %.8e, z %.8e, theta %.8e stub!\n", iface, type, x, y, z, theta);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, type %#x, x %.8e, y %.8e, z %.8e, theta %.8e.\n", iface, type, x, y, z, theta);
+
+    return d3drm_frame3_AddRotation(&frame->IDirect3DRMFrame3_iface, type, x, y, z, theta);
 }
 
 static HRESULT WINAPI d3drm_frame3_AddVisual(IDirect3DRMFrame3 *iface, IUnknown *visual)
@@ -1413,13 +1598,14 @@ static HRESULT WINAPI d3drm_frame3_GetTransform(IDirect3DRMFrame3 *iface,
         IDirect3DRMFrame3 *reference, D3DRMMATRIX4D matrix)
 {
     struct d3drm_frame *frame = impl_from_IDirect3DRMFrame3(iface);
+    struct d3drm_matrix *m = d3drm_matrix(matrix);
 
     TRACE("iface %p, reference %p, matrix %p.\n", iface, reference, matrix);
 
     if (reference)
-        FIXME("Specifying a frame as the root of the scene different from the current root frame is not supported yet\n");
+        FIXME("Ignoring reference frame %p.\n", reference);
 
-    memcpy(matrix, frame->transform, sizeof(D3DRMMATRIX4D));
+    *m = frame->transform;
 
     return D3DRM_OK;
 }
@@ -1427,10 +1613,11 @@ static HRESULT WINAPI d3drm_frame3_GetTransform(IDirect3DRMFrame3 *iface,
 static HRESULT WINAPI d3drm_frame2_GetTransform(IDirect3DRMFrame2 *iface, D3DRMMATRIX4D matrix)
 {
     struct d3drm_frame *frame = impl_from_IDirect3DRMFrame2(iface);
+    struct d3drm_matrix *m = d3drm_matrix(matrix);
 
     TRACE("iface %p, matrix %p.\n", iface, matrix);
 
-    memcpy(matrix, frame->transform, sizeof(D3DRMMATRIX4D));
+    *m = frame->transform;
 
     return D3DRM_OK;
 }
@@ -2414,23 +2601,35 @@ static HRESULT WINAPI d3drm_frame1_SetZbufferMode(IDirect3DRMFrame *iface, D3DRM
 
 static HRESULT WINAPI d3drm_frame3_Transform(IDirect3DRMFrame3 *iface, D3DVECTOR *d, D3DVECTOR *s)
 {
-    FIXME("iface %p, d %p, s %p stub!\n", iface, d, s);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame3(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, d %p, s %p.\n", iface, d, s);
+
+    d3drm_vector_transform_affine(d, s, &frame->transform);
+    while ((frame = frame->parent))
+    {
+        d3drm_vector_transform_affine(d, d, &frame->transform);
+    }
+
+    return D3DRM_OK;
 }
 
 static HRESULT WINAPI d3drm_frame2_Transform(IDirect3DRMFrame2 *iface, D3DVECTOR *d, D3DVECTOR *s)
 {
-    FIXME("iface %p, d %p, s %p stub!\n", iface, d, s);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame2(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, d %p, s %p.\n", iface, d, s);
+
+    return d3drm_frame3_Transform(&frame->IDirect3DRMFrame3_iface, d, s);
 }
 
 static HRESULT WINAPI d3drm_frame1_Transform(IDirect3DRMFrame *iface, D3DVECTOR *d, D3DVECTOR *s)
 {
-    FIXME("iface %p, d %p, s %p stub!\n", iface, d, s);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, d %p, s %p.\n", iface, d, s);
+
+    return d3drm_frame3_Transform(&frame->IDirect3DRMFrame3_iface, d, s);
 }
 
 static HRESULT WINAPI d3drm_frame2_AddMoveCallback2(IDirect3DRMFrame2 *iface,
@@ -2909,7 +3108,7 @@ static const struct IDirect3DRMFrameVtbl d3drm_frame1_vtbl =
     d3drm_frame1_Transform,
 };
 
-static inline struct d3drm_frame *unsafe_impl_from_IDirect3DRMFrame3(IDirect3DRMFrame3 *iface)
+struct d3drm_frame *unsafe_impl_from_IDirect3DRMFrame3(IDirect3DRMFrame3 *iface)
 {
     if (!iface)
         return NULL;
@@ -2935,7 +3134,7 @@ HRESULT d3drm_frame_create(struct d3drm_frame **frame, IUnknown *parent_frame, I
 
     TRACE("frame %p, parent_frame %p, d3drm %p.\n", frame, parent_frame, d3drm);
 
-    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
+    if (!(object = heap_alloc_zero(sizeof(*object))))
         return E_OUTOFMEMORY;
 
     object->IDirect3DRMFrame_iface.lpVtbl = &d3drm_frame1_vtbl;
@@ -2948,7 +3147,7 @@ HRESULT d3drm_frame_create(struct d3drm_frame **frame, IUnknown *parent_frame, I
 
     d3drm_object_init(&object->obj, classname);
 
-    memcpy(object->transform, identity, sizeof(D3DRMMATRIX4D));
+    object->transform = identity;
 
     if (parent_frame)
     {
@@ -2956,7 +3155,7 @@ HRESULT d3drm_frame_create(struct d3drm_frame **frame, IUnknown *parent_frame, I
 
         if (FAILED(hr = IDirect3DRMFrame_QueryInterface(parent_frame, &IID_IDirect3DRMFrame3, (void **)&p)))
         {
-            HeapFree(GetProcessHeap(), 0, object);
+            heap_free(object);
             return hr;
         }
         IDirect3DRMFrame_Release(parent_frame);
@@ -3033,10 +3232,10 @@ static ULONG WINAPI d3drm_animation2_Release(IDirect3DRMAnimation2 *iface)
     {
         d3drm_object_cleanup((IDirect3DRMObject *)&animation->IDirect3DRMAnimation_iface, &animation->obj);
         IDirect3DRM_Release(animation->d3drm);
-        HeapFree(GetProcessHeap(), 0, animation->rotate.keys);
-        HeapFree(GetProcessHeap(), 0, animation->scale.keys);
-        HeapFree(GetProcessHeap(), 0, animation->position.keys);
-        HeapFree(GetProcessHeap(), 0, animation);
+        heap_free(animation->rotate.keys);
+        heap_free(animation->scale.keys);
+        heap_free(animation->position.keys);
+        heap_free(animation);
     }
 
     return refcount;
@@ -3687,7 +3886,7 @@ HRESULT d3drm_animation_create(struct d3drm_animation **animation, IDirect3DRM *
 
     TRACE("animation %p, d3drm %p.\n", animation, d3drm);
 
-    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
+    if (!(object = heap_alloc_zero(sizeof(*object))))
         return E_OUTOFMEMORY;
 
     object->IDirect3DRMAnimation_iface.lpVtbl = &d3drm_animation1_vtbl;

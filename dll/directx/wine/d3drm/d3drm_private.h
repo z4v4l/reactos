@@ -21,32 +21,30 @@
 #ifndef __D3DRM_PRIVATE_INCLUDED__
 #define __D3DRM_PRIVATE_INCLUDED__
 
-#define WIN32_NO_STATUS
-#define _INC_WINDOWS
-#define COM_NO_WINDOWS_H
-
-#define COBJMACROS
 #define NONAMELESSUNION
-
+#define NONAMELESSSTRUCT
+#define COBJMACROS
 #include <assert.h>
 #include <math.h>
+#include "dxfile.h"
+#include "d3drmwin.h"
+#include "rmxfguid.h"
+#include "wine/debug.h"
+#include "wine/heap.h"
+#include "wine/list.h"
 
-#include <windef.h>
-#include <winbase.h>
-#include <wingdi.h>
-#include <d3drm.h>
-#include <dxfile.h>
-#include <d3drmwin.h>
-#include <rmxfguid.h>
+struct d3drm_matrix
+{
+    float _11, _12, _13, _14;
+    float _21, _22, _23, _24;
+    float _31, _32, _33, _34;
+    float _41, _42, _43, _44;
+};
 
-#include <wine/debug.h>
-WINE_DEFAULT_DEBUG_CHANNEL(d3drm);
-
-#include <wine/list.h>
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(*(a)))
-#endif
+static inline struct d3drm_matrix *d3drm_matrix(D3DRMMATRIX4D m)
+{
+    return (struct d3drm_matrix *)m;
+}
 
 struct d3drm_object
 {
@@ -86,9 +84,19 @@ struct d3drm_frame
     SIZE_T nb_lights;
     SIZE_T lights_size;
     IDirect3DRMLight **lights;
-    D3DRMMATRIX4D transform;
+    struct d3drm_matrix transform;
     D3DCOLOR scenebackground;
     DWORD traversal_options;
+};
+
+struct d3drm_box
+{
+    float left;
+    float top;
+    float right;
+    float bottom;
+    float front;
+    float back;
 };
 
 struct d3drm_viewport
@@ -101,9 +109,7 @@ struct d3drm_viewport
     IDirect3DViewport *d3d_viewport;
     IDirect3DMaterial *material;
     IDirect3DRM *d3drm;
-    D3DVALUE back;
-    D3DVALUE front;
-    D3DVALUE field;
+    struct d3drm_box clip;
     D3DRMPROJECTIONTYPE projection;
 };
 
@@ -275,6 +281,8 @@ HRESULT d3drm_object_set_name(struct d3drm_object *object, const char *name) DEC
 void d3drm_object_cleanup(IDirect3DRMObject *iface, struct d3drm_object *object) DECLSPEC_HIDDEN;
 
 struct d3drm_frame *unsafe_impl_from_IDirect3DRMFrame(IDirect3DRMFrame *iface) DECLSPEC_HIDDEN;
+struct d3drm_frame *unsafe_impl_from_IDirect3DRMFrame3(IDirect3DRMFrame3 *iface) DECLSPEC_HIDDEN;
+
 struct d3drm_device *unsafe_impl_from_IDirect3DRMDevice3(IDirect3DRMDevice3 *iface) DECLSPEC_HIDDEN;
 
 HRESULT d3drm_texture_create(struct d3drm_texture **texture, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;

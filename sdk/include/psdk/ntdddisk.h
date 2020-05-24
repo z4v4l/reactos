@@ -109,6 +109,9 @@ extern "C" {
 #define IOCTL_DISK_INTERNAL_SET_VERIFY \
   CTL_CODE(IOCTL_DISK_BASE, 0x0100, METHOD_NEITHER, FILE_ANY_ACCESS)
 
+#define IOCTL_DISK_INTERNAL_SET_NOTIFY \
+  CTL_CODE(IOCTL_DISK_BASE, 0x0102, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #define IOCTL_DISK_IS_WRITABLE \
   CTL_CODE(IOCTL_DISK_BASE, 0x0009, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
@@ -182,6 +185,12 @@ extern "C" {
 #define IOCTL_DISK_VERIFY \
   CTL_CODE(IOCTL_DISK_BASE, 0x0005, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+#define IOCTL_DISK_COPY_DATA \
+  CTL_CODE(IOCTL_DISK_BASE, 0x0019, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+#define IOCTL_DISK_SIMBAD \
+  CTL_CODE(IOCTL_DISK_BASE, 0x0400, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
 #define SMART_GET_VERSION \
   CTL_CODE(IOCTL_DISK_BASE, 0x0020, METHOD_BUFFERED, FILE_READ_ACCESS)
 
@@ -230,8 +239,13 @@ extern "C" {
 #endif
 
 #define IsFTPartition( PartitionType ) \
-  (((PartitionType) & PARTITION_NTFT) && \
-  IsRecognizedPartition(PartitionType))
+  (((PartitionType) & PARTITION_NTFT) && (((PartitionType) & ~0xC0) == PARTITION_FAT_12)) || \
+  (((PartitionType) & PARTITION_NTFT) && (((PartitionType) & ~0xC0) == PARTITION_HUGE)) || \
+  (((PartitionType) & PARTITION_NTFT) && (((PartitionType) & ~0xC0) == PARTITION_IFS)) || \
+  (((PartitionType) & PARTITION_NTFT) && (((PartitionType) & ~0xC0) == PARTITION_FAT32)) || \
+  (((PartitionType) & PARTITION_NTFT) && (((PartitionType) & ~0xC0) == PARTITION_FAT32_XINT13)) || \
+  (((PartitionType) & PARTITION_NTFT) && (((PartitionType) & ~0xC0) == PARTITION_XINT13))
+
 
 #define IsContainerPartition(PartitionType) \
   (((PartitionType) == PARTITION_EXTENDED) || \
@@ -312,7 +326,10 @@ typedef enum _MEDIA_TYPE {
   F5_1Pt23_1024,
   F3_128Mb_512,
   F3_230Mb_512,
-  F8_256_128
+  F8_256_128,
+  F3_200Mb_512,
+  F3_240M_512,
+  F3_32M_512
 } MEDIA_TYPE, *PMEDIA_TYPE;
 
 typedef enum _DETECTION_TYPE {
@@ -370,12 +387,21 @@ typedef struct _DISK_GEOMETRY_EX {
   UCHAR  Data[1];
 } DISK_GEOMETRY_EX, *PDISK_GEOMETRY_EX;
 
+#if (NTDDI_VERSION < NTDDI_WS03)
 #define DiskGeometryGetPartition(Geometry) \
    ((PDISK_PARTITION_INFO)((Geometry) + 1))
 
 #define DiskGeometryGetDetect(Geometry)\
  ((PDISK_DETECTION_INFO)(((PBYTE)DiskGeometryGetPartition(Geometry) + \
   DiskGeometryGetPartition(Geometry)->SizeOfPartitionInfo)))
+#else
+#define DiskGeometryGetPartition(Geometry) \
+   ((PDISK_PARTITION_INFO)((Geometry)->Data))
+
+#define DiskGeometryGetDetect(Geometry)\
+ ((PDISK_DETECTION_INFO)(((ULONG_PTR)DiskGeometryGetPartition(Geometry) + \
+  DiskGeometryGetPartition(Geometry)->SizeOfPartitionInfo)))
+#endif
 
 typedef struct _PARTITION_INFORMATION {
   LARGE_INTEGER  StartingOffset;
@@ -398,7 +424,11 @@ typedef struct _PARTITION_INFORMATION_GPT {
 typedef enum _PARTITION_STYLE {
   PARTITION_STYLE_MBR,
   PARTITION_STYLE_GPT,
-  PARTITION_STYLE_RAW
+  PARTITION_STYLE_RAW,
+#ifdef __REACTOS__
+  /* ReactOS custom partition handlers */
+  PARTITION_STYLE_BRFR = 128 /* Xbox-BRFR partitioning scheme */
+#endif
 } PARTITION_STYLE;
 
 typedef struct _DISK_PARTITION_INFO {
@@ -443,6 +473,9 @@ typedef struct _PARTITION_INFORMATION_EX {
   LARGE_INTEGER  PartitionLength;
   ULONG  PartitionNumber;
   BOOLEAN  RewritePartition;
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS3)
+  BOOLEAN  IsServicePartition;
+#endif
   _ANONYMOUS_UNION union {
     PARTITION_INFORMATION_MBR  Mbr;
     PARTITION_INFORMATION_GPT  Gpt;

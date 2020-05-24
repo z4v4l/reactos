@@ -4,6 +4,7 @@
  * FILE:            lib/rtl/heap.c
  * PURPOSE:         RTL Heap backend allocator
  * PROGRAMMERS:     Copyright 2010 Aleksey Bragin
+ *                  Copyright 2020 Katayama Hirofumi MZ
  */
 
 /* Useful references:
@@ -2180,28 +2181,37 @@ BOOLEAN NTAPI RtlFreeHeap(
     if (RtlpHeapIsSpecial(Flags))
         return RtlDebugFreeHeap(Heap, Flags, Ptr);
 
+    /* Get pointer to the heap entry */
+    HeapEntry = (PHEAP_ENTRY)Ptr - 1;
+
+    /* Protect with SEH in case the pointer is not valid */
+    _SEH2_TRY
+    {
+        /* Check this entry, fail if it's invalid */
+        if (!(HeapEntry->Flags & HEAP_ENTRY_BUSY) ||
+            (((ULONG_PTR)Ptr & 0x7) != 0) ||
+            (HeapEntry->SegmentOffset >= HEAP_SEGMENTS))
+        {
+            /* This is an invalid block */
+            DPRINT1("HEAP: Trying to free an invalid address %p!\n", Ptr);
+            RtlSetLastWin32ErrorAndNtStatusFromNtStatus(STATUS_INVALID_PARAMETER);
+            _SEH2_YIELD(return FALSE);
+        }
+    }
+    _SEH2_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
+    {
+        /* The pointer was invalid */
+        DPRINT1("HEAP: Trying to free an invalid address %p!\n", Ptr);
+        RtlSetLastWin32ErrorAndNtStatusFromNtStatus(STATUS_INVALID_PARAMETER);
+        _SEH2_YIELD(return FALSE);
+    }
+    _SEH2_END;
+
     /* Lock if necessary */
     if (!(Flags & HEAP_NO_SERIALIZE))
     {
         RtlEnterHeapLock(Heap->LockVariable, TRUE);
         Locked = TRUE;
-    }
-
-    /* Get pointer to the heap entry */
-    HeapEntry = (PHEAP_ENTRY)Ptr - 1;
-
-    /* Check this entry, fail if it's invalid */
-    if (!(HeapEntry->Flags & HEAP_ENTRY_BUSY) ||
-        (((ULONG_PTR)Ptr & 0x7) != 0) ||
-        (HeapEntry->SegmentOffset >= HEAP_SEGMENTS))
-    {
-        /* This is an invalid block */
-        DPRINT1("HEAP: Trying to free an invalid address %p!\n", Ptr);
-        RtlSetLastWin32ErrorAndNtStatusFromNtStatus(STATUS_INVALID_PARAMETER);
-
-        /* Release the heap lock */
-        if (Locked) RtlLeaveHeapLock(Heap->LockVariable);
-        return FALSE;
     }
 
     if (HeapEntry->Flags & HEAP_ENTRY_VIRTUAL_ALLOC)
@@ -3963,7 +3973,8 @@ RtlQueryHeapInformation(HANDLE HeapHandle,
     return STATUS_UNSUCCESSFUL;
 }
 
-NTSTATUS
+/* @implemented */
+ULONG
 NTAPI
 RtlMultipleAllocateHeap(IN PVOID HeapHandle,
                         IN ULONG Flags,
@@ -3971,19 +3982,83 @@ RtlMultipleAllocateHeap(IN PVOID HeapHandle,
                         IN ULONG Count,
                         OUT PVOID *Array)
 {
-    UNIMPLEMENTED;
-    return 0;
+    ULONG Index;
+    EXCEPTION_RECORD ExceptionRecord;
+
+    for (Index = 0; Index < Count; ++Index)
+    {
+        Array[Index] = RtlAllocateHeap(HeapHandle, Flags, Size);
+        if (Array[Index] == NULL)
+        {
+            /* ERROR_NOT_ENOUGH_MEMORY */
+            RtlSetLastWin32ErrorAndNtStatusFromNtStatus(STATUS_NO_MEMORY);
+
+            if (Flags & HEAP_GENERATE_EXCEPTIONS)
+            {
+                ExceptionRecord.ExceptionCode = STATUS_NO_MEMORY;
+                ExceptionRecord.ExceptionRecord = NULL;
+                ExceptionRecord.NumberParameters = 0;
+                ExceptionRecord.ExceptionFlags = 0;
+
+                RtlRaiseException(&ExceptionRecord);
+            }
+            break;
+        }
+    }
+
+    return Index;
 }
 
-NTSTATUS
+/* @implemented */
+ULONG
 NTAPI
 RtlMultipleFreeHeap(IN PVOID HeapHandle,
                     IN ULONG Flags,
                     IN ULONG Count,
                     OUT PVOID *Array)
 {
+    ULONG Index;
+
+    for (Index = 0; Index < Count; ++Index)
+    {
+        if (Array[Index] == NULL)
+            continue;
+
+        _SEH2_TRY
+        {
+            if (!RtlFreeHeap(HeapHandle, Flags, Array[Index]))
+            {
+                /* ERROR_INVALID_PARAMETER */
+                RtlSetLastWin32ErrorAndNtStatusFromNtStatus(STATUS_INVALID_PARAMETER);
+                break;
+            }
+        }
+        _SEH2_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
+        {
+            /* ERROR_INVALID_PARAMETER */
+            RtlSetLastWin32ErrorAndNtStatusFromNtStatus(STATUS_INVALID_PARAMETER);
+            break;
+        }
+        _SEH2_END;
+    }
+
+    return Index;
+}
+
+/*
+ * Info:
+ * - https://securityxploded.com/enumheaps.php
+ * - https://evilcodecave.wordpress.com/2009/04/14/rtlqueryprocessheapinformation-as-anti-dbg-trick/
+ */
+struct _DEBUG_BUFFER;
+
+NTSTATUS
+NTAPI
+RtlQueryProcessHeapInformation(
+    IN struct _DEBUG_BUFFER *DebugBuffer)
+{
     UNIMPLEMENTED;
-    return 0;
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 /* EOF */

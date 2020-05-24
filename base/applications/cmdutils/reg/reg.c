@@ -16,15 +16,12 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <stdarg.h>
-#include <windef.h>
-#include <winbase.h>
-#include <winuser.h>
-#include <winreg.h>
-#include <wincon.h>
-#include <shlwapi.h>
-#include <wine/unicode.h>
+#include <windows.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <wine/debug.h>
+#include <wine/heap.h>
 #include "reg.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(reg);
@@ -81,9 +78,11 @@ type_rels[] =
     {REG_MULTI_SZ, type_multi_sz},
 };
 
+static const WCHAR newlineW[] = {'\n',0};
+
 void *heap_xalloc(size_t size)
 {
-    void *buf = HeapAlloc(GetProcessHeap(), 0, size);
+    void *buf = heap_alloc(size);
     if (!buf)
     {
         ERR("Out of memory!\n");
@@ -94,12 +93,7 @@ void *heap_xalloc(size_t size)
 
 void *heap_xrealloc(void *buf, size_t size)
 {
-    void *new_buf;
-
-    if (buf)
-        new_buf = HeapReAlloc(GetProcessHeap(), 0, buf, size);
-    else
-        new_buf = HeapAlloc(GetProcessHeap(), 0, size);
+    void *new_buf = heap_realloc(buf, size);
 
     if (!new_buf)
     {
@@ -110,12 +104,7 @@ void *heap_xrealloc(void *buf, size_t size)
     return new_buf;
 }
 
-BOOL heap_free(void *buf)
-{
-    return HeapFree(GetProcessHeap(), 0, buf);
-}
-
-static void output_writeconsole(const WCHAR *str, DWORD wlen)
+void output_writeconsole(const WCHAR *str, DWORD wlen)
 {
     DWORD count, ret;
 
@@ -155,7 +144,7 @@ static void output_formatstring(const WCHAR *fmt, __ms_va_list va_args)
     LocalFree(str);
 }
 
-void __cdecl output_message(unsigned int id, ...)
+void WINAPIV output_message(unsigned int id, ...)
 {
     WCHAR fmt[1024];
     __ms_va_list va_args;
@@ -170,7 +159,7 @@ void __cdecl output_message(unsigned int id, ...)
     __ms_va_end(va_args);
 }
 
-static void __cdecl output_string(const WCHAR *fmt, ...)
+static void WINAPIV output_string(const WCHAR *fmt, ...)
 {
     __ms_va_list va_args;
 
@@ -180,7 +169,7 @@ static void __cdecl output_string(const WCHAR *fmt, ...)
 }
 
 /* ask_confirm() adapted from programs/cmd/builtins.c */
-static BOOL ask_confirm(unsigned int msgid, WCHAR *reg_info)
+BOOL ask_confirm(unsigned int msgid, WCHAR *reg_info)
 {
     HMODULE hmod;
     WCHAR Ybuffer[4];
@@ -202,7 +191,7 @@ static BOOL ask_confirm(unsigned int msgid, WCHAR *reg_info)
         output_message(msgid, str);
         output_message(STRING_YESNO);
         ReadConsoleW(GetStdHandle(STD_INPUT_HANDLE), answer, ARRAY_SIZE(answer), &count, NULL);
-        answer[0] = toupperW(answer[0]);
+        answer[0] = towupper(answer[0]);
         if (answer[0] == Ybuffer[0])
             return TRUE;
         if (answer[0] == Nbuffer[0])
@@ -212,9 +201,9 @@ static BOOL ask_confirm(unsigned int msgid, WCHAR *reg_info)
 
 static inline BOOL path_rootname_cmp(const WCHAR *input_path, const WCHAR *rootkey_name)
 {
-    DWORD length = strlenW(rootkey_name);
+    DWORD length = lstrlenW(rootkey_name);
 
-    return (!strncmpiW(input_path, rootkey_name, length) &&
+    return (!_wcsnicmp(input_path, rootkey_name, length) &&
             (input_path[length] == 0 || input_path[length] == '\\'));
 }
 
@@ -241,7 +230,7 @@ static DWORD wchar_get_type(const WCHAR *type_name)
 
     for (i = 0; i < ARRAY_SIZE(type_rels); i++)
     {
-        if (!strcmpiW(type_rels[i].name, type_name))
+        if (!wcsicmp(type_rels[i].name, type_name))
             return type_rels[i].type;
     }
 
@@ -286,7 +275,7 @@ static LPBYTE get_regdata(const WCHAR *data, DWORD reg_type, WCHAR separator, DW
         {
             LPWSTR rest;
             unsigned long val;
-            val = wcstoul(data, &rest, (tolowerW(data[1]) == 'x') ? 16 : 10);
+            val = wcstoul(data, &rest, (towlower(data[1]) == 'x') ? 16 : 10);
             if (*rest || data[0] == '-' || (val == ~0u && errno == ERANGE)) {
                 output_message(STRING_MISSING_INTEGER);
                 break;
@@ -327,7 +316,7 @@ static LPBYTE get_regdata(const WCHAR *data, DWORD reg_type, WCHAR separator, DW
         }
         case REG_MULTI_SZ:
         {
-            int i, destindex, len = strlenW(data);
+            int i, destindex, len = lstrlenW(data);
             WCHAR *buffer = heap_xalloc((len + 2) * sizeof(WCHAR));
 
             for (i = 0, destindex = 0; i < len; i++, destindex++)
@@ -364,7 +353,7 @@ static LPBYTE get_regdata(const WCHAR *data, DWORD reg_type, WCHAR separator, DW
 
 static BOOL sane_path(const WCHAR *key)
 {
-    unsigned int i = strlenW(key);
+    unsigned int i = lstrlenW(key);
 
     if (i < 3 || (key[i - 1] == '\\' && key[i - 2] == '\\'))
     {
@@ -539,7 +528,7 @@ static WCHAR *reg_data_to_wchar(DWORD type, const BYTE *src, DWORD size_bytes)
         case REG_SZ:
         case REG_EXPAND_SZ:
             buffer = heap_xalloc(size_bytes);
-            strcpyW(buffer, (WCHAR *)src);
+            lstrcpyW(buffer, (WCHAR *)src);
             break;
         case REG_NONE:
         case REG_BINARY:
@@ -550,7 +539,7 @@ static WCHAR *reg_data_to_wchar(DWORD type, const BYTE *src, DWORD size_bytes)
             buffer = heap_xalloc((size_bytes * 2 + 1) * sizeof(WCHAR));
             ptr = buffer;
             for (i = 0; i < size_bytes; i++)
-                ptr += sprintfW(ptr, fmt, src[i]);
+                ptr += swprintf(ptr, fmt, src[i]);
             break;
         }
         case REG_DWORD:
@@ -561,7 +550,7 @@ static WCHAR *reg_data_to_wchar(DWORD type, const BYTE *src, DWORD size_bytes)
             static const WCHAR fmt[] = {'0','x','%','x',0};
 
             buffer = heap_xalloc((zero_x_dword + 1) * sizeof(WCHAR));
-            sprintfW(buffer, fmt, *(DWORD *)src);
+            swprintf(buffer, fmt, *(DWORD *)src);
             break;
         }
         case REG_MULTI_SZ:
@@ -614,7 +603,6 @@ static const WCHAR *reg_type_to_wchar(DWORD type)
 static void output_value(const WCHAR *value_name, DWORD type, BYTE *data, DWORD data_size)
 {
     static const WCHAR fmt[] = {' ',' ',' ',' ','%','1',0};
-    static const WCHAR newlineW[] = {'\n',0};
     WCHAR defval[32];
     WCHAR *reg_data;
 
@@ -641,20 +629,18 @@ static void output_value(const WCHAR *value_name, DWORD type, BYTE *data, DWORD 
     output_string(newlineW);
 }
 
-static WCHAR *build_subkey_path(WCHAR *path, DWORD path_len, WCHAR *subkey_name, DWORD subkey_len)
+WCHAR *build_subkey_path(WCHAR *path, DWORD path_len, WCHAR *subkey_name, DWORD subkey_len)
 {
     WCHAR *subkey_path;
     static const WCHAR fmt[] = {'%','s','\\','%','s',0};
 
     subkey_path = heap_xalloc((path_len + subkey_len + 2) * sizeof(WCHAR));
-    sprintfW(subkey_path, fmt, path, subkey_name);
+    swprintf(subkey_path, fmt, path, subkey_name);
 
     return subkey_path;
 }
 
 static unsigned int num_values_found = 0;
-
-#define MAX_SUBKEY_LEN   257
 
 static int query_value(HKEY key, WCHAR *value_name, WCHAR *path, BOOL recurse)
 {
@@ -664,7 +650,6 @@ static int query_value(HKEY key, WCHAR *value_name, WCHAR *path, BOOL recurse)
     DWORD type, path_len, i;
     BYTE *data;
     WCHAR fmt[] = {'%','1','\n',0};
-    WCHAR newlineW[] = {'\n',0};
     WCHAR *subkey_name, *subkey_path;
     HKEY subkey;
 
@@ -709,7 +694,7 @@ static int query_value(HKEY key, WCHAR *value_name, WCHAR *path, BOOL recurse)
 
     subkey_name = heap_xalloc(MAX_SUBKEY_LEN * sizeof(WCHAR));
 
-    path_len = strlenW(path);
+    path_len = lstrlenW(path);
 
     i = 0;
     for (;;)
@@ -744,7 +729,6 @@ static int query_all(HKEY key, WCHAR *path, BOOL recurse)
     WCHAR fmt[] = {'%','1','\n',0};
     WCHAR fmt_path[] = {'%','1','\\','%','2','\n',0};
     WCHAR *value_name, *subkey_name, *subkey_path;
-    WCHAR newlineW[] = {'\n',0};
     BYTE *data;
     HKEY subkey;
 
@@ -788,7 +772,7 @@ static int query_all(HKEY key, WCHAR *path, BOOL recurse)
 
     subkey_name = heap_xalloc(MAX_SUBKEY_LEN * sizeof(WCHAR));
 
-    path_len = strlenW(path);
+    path_len = lstrlenW(path);
 
     i = 0;
     for (;;)
@@ -825,7 +809,6 @@ static int reg_query(HKEY root, WCHAR *path, WCHAR *key_name, WCHAR *value_name,
                      BOOL value_empty, BOOL recurse)
 {
     HKEY key;
-    WCHAR newlineW[] = {'\n',0};
     int ret;
 
     if (RegOpenKeyExW(root, path, 0, KEY_READ, &key) != ERROR_SUCCESS)
@@ -862,47 +845,56 @@ static WCHAR *get_long_key(HKEY root, WCHAR *path)
             break;
     }
 
-    len = strlenW(root_rels[i].long_name);
+    len = lstrlenW(root_rels[i].long_name);
 
     if (!path)
     {
         long_key = heap_xalloc((len + 1) * sizeof(WCHAR));
-        strcpyW(long_key, root_rels[i].long_name);
+        lstrcpyW(long_key, root_rels[i].long_name);
         return long_key;
     }
 
-    len += strlenW(path) + 1; /* add one for the backslash */
+    len += lstrlenW(path) + 1; /* add one for the backslash */
     long_key = heap_xalloc((len + 1) * sizeof(WCHAR));
-    sprintfW(long_key, fmt, root_rels[i].long_name, path);
+    swprintf(long_key, fmt, root_rels[i].long_name, path);
     return long_key;
 }
 
-static BOOL parse_registry_key(const WCHAR *key, HKEY *root, WCHAR **path, WCHAR **long_key)
+BOOL parse_registry_key(const WCHAR *key, HKEY *root, WCHAR **path, WCHAR **long_key)
 {
     if (!sane_path(key))
         return FALSE;
 
+    *path = wcschr(key, '\\');
+    if (*path) (*path)++;
+
     *root = path_get_rootkey(key);
     if (!*root)
     {
-        output_message(STRING_INVALID_KEY);
+        if (*path) *(*path - 1) = 0;
+        output_message(STRING_INVALID_SYSTEM_KEY, key);
         return FALSE;
     }
-
-    *path = strchrW(key, '\\');
-    if (*path) (*path)++;
 
     *long_key = get_long_key(*root, *path);
 
     return TRUE;
 }
 
-static BOOL is_help_switch(const WCHAR *s)
+static BOOL is_switch(const WCHAR *s, const WCHAR c)
 {
-    if (strlenW(s) > 2)
+    if (lstrlenW(s) > 2)
         return FALSE;
 
-    if ((s[0] == '/' || s[0] == '-') && (s[1] == 'h' || s[1] == '?'))
+    if ((s[0] == '/' || s[0] == '-') && (s[1] == c || s[1] == towupper(c)))
+        return TRUE;
+
+    return FALSE;
+}
+
+static BOOL is_help_switch(const WCHAR *s)
+{
+    if (is_switch(s, '?') || is_switch(s, 'h'))
         return TRUE;
 
     return FALSE;
@@ -912,6 +904,7 @@ enum operations {
     REG_ADD,
     REG_DELETE,
     REG_IMPORT,
+    REG_EXPORT,
     REG_QUERY,
     REG_INVALID
 };
@@ -923,6 +916,7 @@ static enum operations get_operation(const WCHAR *str, int *op_help)
     static const WCHAR add[] = {'a','d','d',0};
     static const WCHAR delete[] = {'d','e','l','e','t','e',0};
     static const WCHAR import[] = {'i','m','p','o','r','t',0};
+    static const WCHAR export[] = {'e','x','p','o','r','t',0};
     static const WCHAR query[] = {'q','u','e','r','y',0};
 
     static const struct op_info op_array[] =
@@ -930,6 +924,7 @@ static enum operations get_operation(const WCHAR *str, int *op_help)
         { add,     REG_ADD,     STRING_ADD_USAGE },
         { delete,  REG_DELETE,  STRING_DELETE_USAGE },
         { import,  REG_IMPORT,  STRING_IMPORT_USAGE },
+        { export,  REG_EXPORT,  STRING_EXPORT_USAGE },
         { query,   REG_QUERY,   STRING_QUERY_USAGE },
         { NULL,    -1,          0 }
     };
@@ -948,7 +943,7 @@ static enum operations get_operation(const WCHAR *str, int *op_help)
     return REG_INVALID;
 }
 
-int wmain(int argc, WCHAR *argvW[])
+int __cdecl wmain(int argc, WCHAR *argvW[])
 {
     int i, op, op_help, ret;
     BOOL show_op_help = FALSE;
@@ -986,7 +981,7 @@ int wmain(int argc, WCHAR *argvW[])
     if (argc == 2 || ((show_op_help || op == REG_IMPORT) && argc > 3))
     {
         output_message(STRING_INVALID_SYNTAX);
-        output_message(STRING_FUNC_HELP, struprW(argvW[1]));
+        output_message(STRING_FUNC_HELP, _wcsupr(argvW[1]));
         return 1;
     }
     else if (show_op_help)
@@ -997,6 +992,9 @@ int wmain(int argc, WCHAR *argvW[])
 
     if (op == REG_IMPORT)
         return reg_import(argvW[2]);
+
+    if (op == REG_EXPORT)
+        return reg_export(argc, argvW);
 
     if (!parse_registry_key(argvW[2], &root, &path, &key_name))
         return 1;
@@ -1023,7 +1021,7 @@ int wmain(int argc, WCHAR *argvW[])
                 return 1;
             }
 
-            switch(tolowerW(argvW[i][1]))
+            switch(towlower(argvW[i][1]))
             {
             case 'v':
                 if (value_name || !(value_name = argvW[++i]))
@@ -1054,7 +1052,7 @@ int wmain(int argc, WCHAR *argvW[])
                 }
 
                 ptr = argvW[++i];
-                if (!ptr || strlenW(ptr) != 1)
+                if (!ptr || lstrlenW(ptr) != 1)
                 {
                     output_message(STRING_INVALID_CMDLINE);
                     return 1;

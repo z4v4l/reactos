@@ -1,6 +1,20 @@
 
 add_definitions(-D__ROS_LONG64__)
 
+if (MSVC)
+    add_compile_flags("/wd4090") # C4090: 'function': different 'const' qualifiers
+    add_compile_flags("/wd4133") # C4133: 'function': incompatible types - from '<enum> *' to 'UINT *'
+    add_compile_flags("/wd4146") # C4146: unary minus operator applied to unsigned type, result still unsigned
+    add_compile_flags("/wd4189") # C4189: 'x': local variable is initialized but not referenced
+    add_compile_flags("/wd4267") # C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+    add_compile_flags("/wd4305") # C4305: '=': truncation from 'double' to 'FLOAT'
+    if (ARCH STREQUAL "amd64")
+        add_compile_flags("/wd4101") # C4101: 'x': unreferenced local variable
+        add_compile_flags("/wd4312") # C4312: 'type cast': conversion from 'unsigned int' to 'char *' of greater size
+        add_compile_flags("/wd4334") # C4334: '<<': result of 32-bit shift implicitly converted to 64 bits (was 64-bit shift intended?)
+    endif()
+endif()
+
 add_subdirectory(advapi32)
 add_subdirectory(advpack)
 add_subdirectory(amstream)
@@ -19,9 +33,12 @@ add_subdirectory(credui)
 add_subdirectory(crypt32)
 add_subdirectory(cryptnet)
 add_subdirectory(cryptui)
+add_subdirectory(d3dcompiler_43)
 add_subdirectory(d3drm)
+add_subdirectory(d3dx9_36)
 add_subdirectory(devenum)
 add_subdirectory(dinput)
+add_subdirectory(dinput8)
 add_subdirectory(dnsapi)
 add_subdirectory(dplayx)
 add_subdirectory(dsound)
@@ -30,7 +47,9 @@ add_subdirectory(faultrep)
 add_subdirectory(fusion)
 add_subdirectory(gdi32)
 add_subdirectory(gdiplus)
+add_subdirectory(hid)
 add_subdirectory(hlink)
+add_subdirectory(hnetcfg)
 add_subdirectory(imagehlp)
 add_subdirectory(imm32)
 add_subdirectory(inetcomm)
@@ -62,7 +81,6 @@ add_subdirectory(netapi32)
 add_subdirectory(netcfgx)
 add_subdirectory(ntdll)
 add_subdirectory(ntdsapi)
-add_subdirectory(ntprint)
 add_subdirectory(odbccp32)
 add_subdirectory(ole32)
 add_subdirectory(oleacc)

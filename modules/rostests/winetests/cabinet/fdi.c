@@ -20,26 +20,18 @@
  */
 
 #include <stdio.h>
-//#include <windows.h>
-#include <wine/test.h>
-#include <fci.h>
-#include <fdi.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <windows.h>
+#include "fci.h"
+#include "fdi.h"
+#include "wine/test.h"
 
 /* make the max size large so there is only one cab file */
 #define MEDIA_SIZE          999999999
 #define FOLDER_THRESHOLD    900000
 
 static CHAR CURR_DIR[MAX_PATH];
-
-/* avoid including CRT headers */
-#ifndef _O_BINARY
-# define _O_BINARY 0x8000
-#endif
-
-#ifndef _S_IREAD
-# define _S_IREAD  0x0100
-# define _S_IWRITE 0x0080
-#endif
 
 #include <pshpack1.h>
 
@@ -744,7 +736,7 @@ static void test_FDIIsCabinet(void)
 
 static INT_PTR __cdecl CopyProgress(FDINOTIFICATIONTYPE fdint, PFDINOTIFICATION pfdin)
 {
-    return 0;
+    return 37;  /* doc says 0, but anything != -1 apparently means success as well */
 }
 
 static INT_PTR CDECL fdi_mem_open(char *name, int oflag, int pmode)
@@ -784,7 +776,7 @@ static UINT CDECL fdi_mem_read(INT_PTR hf, void *pv, UINT cb)
 
 static UINT CDECL fdi_mem_write(INT_PTR hf, void *pv, UINT cb)
 {
-    static const char expected[12] = "Hello World!";
+    static const char expected[] = "Hello World!";
 
     trace("mem_write(%#lx,%p,%u)\n", hf, pv, cb);
 

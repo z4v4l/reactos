@@ -7,6 +7,8 @@
  * PROGRAMMERS: Benedikt Freisen
  */
 
+#pragma once
+
 class CMainWindow : public CWindowImpl<CMainWindow>
 {
 public:
@@ -40,6 +42,6 @@ public:
 
     void alignChildrenToMainWindow();
     void saveImage(BOOL overwrite);
-    void UpdateApplicationProperties(HBITMAP bitmap, LPCTSTR newfilepathname);
     void InsertSelectionFromHBITMAP(HBITMAP bitmap, HWND window);
+    BOOL ConfirmSave();
 };

@@ -47,8 +47,8 @@ static KTIMER MiBalancerTimer;
 
 /* FUNCTIONS ****************************************************************/
 
-VOID
 INIT_FUNCTION
+VOID
 NTAPI
 MmInitializeBalancer(ULONG NrAvailablePages, ULONG NrSystemPages)
 {
@@ -76,8 +76,8 @@ MmInitializeBalancer(ULONG NrAvailablePages, ULONG NrSystemPages)
     MiMemoryConsumers[MC_USER].PagesTarget = NrAvailablePages - MiMinimumAvailablePages;
 }
 
-VOID
 INIT_FUNCTION
+VOID
 NTAPI
 MmInitializeMemoryConsumer(
     ULONG Consumer,
@@ -357,11 +357,11 @@ MiBalancerThread(PVOID Unused)
                 PEPROCESS Process = PsGetCurrentProcess();
 
                 /* Acquire PFN lock */
-                KIRQL OldIrql = KeAcquireQueuedSpinLock(LockQueuePfnLock);
+                KIRQL OldIrql = MiAcquirePfnLock();
                 PMMPDE pointerPde;
                 for (Address = (ULONG_PTR)MI_LOWEST_VAD_ADDRESS;
-                        Address < (ULONG_PTR)MM_HIGHEST_VAD_ADDRESS;
-                        Address += (PAGE_SIZE * PTE_COUNT))
+                     Address < (ULONG_PTR)MM_HIGHEST_VAD_ADDRESS;
+                     Address += PTE_PER_PAGE * PAGE_SIZE)
                 {
                     if (MiQueryPageTableReferences((PVOID)Address) == 0)
                     {
@@ -372,7 +372,7 @@ MiBalancerThread(PVOID Unused)
                     }
                 }
                 /* Release lock */
-                KeReleaseQueuedSpinLock(LockQueuePfnLock, OldIrql);
+                MiReleasePfnLock(OldIrql);
             }
 #endif
             do
@@ -410,7 +410,7 @@ BOOLEAN MmRosNotifyAvailablePage(PFN_NUMBER Page)
     PMMPFN Pfn1;
 
     /* Make sure the PFN lock is held */
-    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+    MI_ASSERT_PFN_LOCK_HELD();
 
     if (!MiMinimumAvailablePages)
     {
@@ -443,8 +443,8 @@ BOOLEAN MmRosNotifyAvailablePage(PFN_NUMBER Page)
     return TRUE;
 }
 
-VOID
 INIT_FUNCTION
+VOID
 NTAPI
 MiInitBalancerThread(VOID)
 {

@@ -17,14 +17,14 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
-//#include <stdarg.h>
+#include <stdarg.h>
 #include <stdio.h>
-#define NONAMELESSUNION
+
 #include <windef.h>
 #include <winbase.h>
-//#include <winerror.h>
+#include <winerror.h>
 #include <wincrypt.h>
-#include <wine/test.h>
+#include "wine/test.h"
 
 static const BYTE bigCert[] = {
 0x30,0x78,0x02,0x01,0x01,0x30,0x02,0x06,0x00,0x30,0x14,0x31,0x12,0x30,0x10,
@@ -316,7 +316,7 @@ static void make_tmp_file(LPSTR path)
 static void test_retrieveObjectByUrl(void)
 {
     BOOL ret;
-    char tmpfile[MAX_PATH * 2], url[MAX_PATH + 8];
+    char tmpfile[MAX_PATH], url[MAX_PATH + 8];
     CRYPT_BLOB_ARRAY *pBlobArray;
     PCCERT_CONTEXT cert;
     PCCRL_CONTEXT crl;
@@ -332,7 +332,7 @@ static void test_retrieveObjectByUrl(void)
        GetLastError(), GetLastError());
 
     make_tmp_file(tmpfile);
-    snprintf(url, sizeof(url), "file://%s", tmpfile);
+    sprintf(url, "file://%s", tmpfile);
 
     pBlobArray = (CRYPT_BLOB_ARRAY *)0xdeadbeef;
     ret = CryptRetrieveObjectByUrlA(url, NULL, 0, 0, (void **)&pBlobArray,

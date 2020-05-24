@@ -1,70 +1,18 @@
 /*
- * PROJECT:         ReactOS api tests
- * LICENSE:         LGPLv2.1+ - See COPYING.LIB in the top level directory
- * PURPOSE:         Test for CString
- * PROGRAMMERS:     Mark Jansen
- *                  Katayama Hirofumi MZ
+ * PROJECT:     ReactOS api tests
+ * LICENSE:     GPL-2.0+ (https://spdx.org/licenses/GPL-2.0+)
+ * PURPOSE:     Test for CString
+ * COPYRIGHT:   Copyright 2016-2017 Mark Jansen (mark.jansen@reactos.org)
+ *              Copyright 2017 Katayama Hirofumi MZ
  */
 
 #include <atlstr.h>
 #include "resource.h"
 
-#ifdef __REACTOS__
+#ifdef HAVE_APITEST
     #include <apitest.h>
 #else
-    #include <stdlib.h>
-    #include <stdio.h>
-    #include <stdarg.h>
-    #include <windows.h>
-    int g_tests_executed = 0;
-    int g_tests_failed = 0;
-    int g_tests_skipped = 0;
-    const char *g_file = NULL;
-    int g_line = 0;
-    void set_location(const char *file, int line)
-    {
-        g_file = file;
-        g_line = line;
-    }
-    void ok_func(int value, const char *fmt, ...)
-    {
-        va_list va;
-        va_start(va, fmt);
-        if (!value)
-        {
-            printf("%s (%d): ", g_file, g_line);
-            vprintf(fmt, va);
-            g_tests_failed++;
-        }
-        g_tests_executed++;
-        va_end(va);
-    }
-    void skip_func(const char *fmt, ...)
-    {
-        va_list va;
-        va_start(va, fmt);
-        printf("%s (%d): test skipped: ", g_file, g_line);
-        vprintf(fmt, va);
-        g_tests_skipped++;
-        va_end(va);
-    }
-    #undef ok
-    #define ok(value, ...) do { \
-        set_location(__FILE__, __LINE__); \
-        ok_func(value, __VA_ARGS__); \
-    } while (0)
-    #define ok_(x1,x2) set_location(x1,x2); ok_func
-    #define skip(...) do { \
-        set_location(__FILE__, __LINE__); \
-        skip_func(__VA_ARGS__); \
-    } while (0)
-    #define START_TEST(x)   int main(void)
-    char *wine_dbgstr_w(const wchar_t *wstr)
-    {
-        static char buf[512];
-        WideCharToMultiByte(CP_ACP, 0, wstr, -1, buf, _countof(buf), NULL, NULL);
-        return buf;
-    }
+    #include "atltest.h"
 #endif
 
 struct traits_test
@@ -169,15 +117,6 @@ static void test_basetypes()
     }
 }
 
-// Allocation strategy seems to differ a bit between us and MS's atl.
-// if someone cares enough to find out why, feel free to change the macro below.
-#ifdef __REACTOS__
-#define ALLOC_EXPECT(a, b)  b
-#else
-#define ALLOC_EXPECT(a, b)  a
-#endif
-
-
 #undef ok
 #undef _T
 
@@ -222,11 +161,6 @@ START_TEST(CString)
 {
     test_basetypes();
 
-    if ((ALLOC_EXPECT(1, 2)) == 2)
-    {
-        skip("Ignoring real GetAllocLength() lenght\n");
-    }
-
     test_operators_initW();
     test_operators_initA();
 
@@ -254,8 +188,6 @@ START_TEST(CString)
     test_load_strW();
     test_load_strA();
 
-#ifndef __REACTOS__
-    printf("CString: %i tests executed (0 marked as todo, %i failures), %i skipped.\n", g_tests_executed, g_tests_failed, g_tests_skipped);
-    return 0;
-#endif
+    test_bstrW();
+    test_bstrA();
 }

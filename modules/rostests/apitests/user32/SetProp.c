@@ -5,9 +5,7 @@
  * PROGRAMMERS:     Thomas Faber <thomas.faber@reactos.org>
  */
 
-#include <apitest.h>
-#include <winuser.h>
-#include <user32testhelpers.h>
+#include "precomp.h"
 
 static ATOM Atom1, Atom2, Atom3;
 
@@ -160,6 +158,7 @@ START_TEST(SetProp)
     /* In particular we shouldn't see these from WM_SETICON */
     SysICAtom = RegisterWindowMessageW(L"SysIC");
     Prop = GetPropW(hWnd, (PCWSTR)MAKEINTATOM(SysICAtom));
+    ros_skip_flaky
     ok(Prop == NULL, "SysIC prop (0x%04x) is %p\n", SysICAtom, Prop);
 
     SysICSAtom = RegisterWindowMessageW(L"SysICS");

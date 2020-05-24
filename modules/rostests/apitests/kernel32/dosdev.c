@@ -18,13 +18,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <stdarg.h>
-#include <stdio.h>
-
-#include "wine/test.h"
-#include "windef.h"
-#include "winbase.h"
-#include "winerror.h"
+#include "precomp.h"
 
 #define SUBST_DRIVE_LETTER 'M'
 #define SUBST_DRIVE "M:"
@@ -33,10 +27,10 @@
 #define SUBST_DRIVE_SEARCH "M:\\*"
 #define SUBST_DRIVE_LOWERCASE "m:"
 #define SUBST_DRIVE_LOWERCASE_SEARCH "m:\\*"
-#define SUBST_DRIVE2_LETTER 'R'
-#define SUBST_DRIVE2 "R:"
-#define SUBST_DRIVE2_WITH_TRAILING_PATH_SEPERATOR "R:\\"
-#define SUBST_DRIVE2_SEARCH "R:\\*"
+#define SUBST_DRIVE2_LETTER 'N'
+#define SUBST_DRIVE2 "N:"
+#define SUBST_DRIVE2_WITH_TRAILING_PATH_SEPERATOR "N:\\"
+#define SUBST_DRIVE2_SEARCH "N:\\*"
 
 static void test_DefineDosDeviceA(void)
 {

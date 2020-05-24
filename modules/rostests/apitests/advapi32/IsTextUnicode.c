@@ -6,13 +6,8 @@
  *                  Dmitry Chapyshev
  */
 
-#include <apitest.h>
+#include "precomp.h"
 
-#define WIN32_NO_STATUS
-#include <ndk/rtlfuncs.h>
-#include <winbase.h>
-#include <winnls.h>
-#include <wincon.h>
 #include <stdio.h>
 
 PVOID LoadCodePageData(ULONG Code)
@@ -23,9 +18,9 @@ PVOID LoadCodePageData(ULONG Code)
     GetSystemDirectoryA(sysdir, MAX_PATH);
 
     if (Code != -1)
-       sprintf(filename, "%s\\c_%lu.nls", sysdir, Code);
+        StringCbPrintfA(filename, sizeof(filename),  "%s\\c_%lu.nls", sysdir, Code);
     else
-        sprintf(filename, "%s\\l_intl.nls", sysdir);
+        StringCbPrintfA(filename, sizeof(filename),  "%s\\l_intl.nls", sysdir);
 
     hFile = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (hFile != INVALID_HANDLE_VALUE)

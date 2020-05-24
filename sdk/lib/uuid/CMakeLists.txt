@@ -75,7 +75,7 @@ list(APPEND IDL_SOURCES
 #    mstime.idl
     msxml.idl
 #    my_msdatsrc.idl
-#    natupnp.idl
+    natupnp.idl
 #    netcfgn.idl
 #    netcfgp.idl
 #    netcfgx.idl
@@ -219,7 +219,9 @@ list(APPEND SOURCE
 #    vcguids.c
     wdmguids.c
     otherguids.c
-    undoc.c)
+    undoc.c
+    precomp.h)
 
 add_library(uuid ${SOURCE})
+add_pch(uuid precomp.h SOURCE)
 add_dependencies(uuid psdk)

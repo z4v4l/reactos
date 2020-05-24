@@ -10,6 +10,7 @@
 
 #include <commctrl.h>
 #include <commdlg.h>
+#include <winnls.h>
 
 #include "sndrec32.h"
 #include "shellapi.h"
@@ -77,30 +78,6 @@ RECT text_rect;
 RECT text2_rect;
 RECT cli;
 
-INT_PTR
-CALLBACK
-AboutDlgProc(HWND hWnd,
-             UINT msg,
-             WPARAM wp,
-             LPARAM lp)
-{
-    switch (msg)
-    {
-        case WM_COMMAND:
-            switch (LOWORD(wp))
-            {
-                case IDOK:
-                    EndDialog(hWnd, 0);
-                    return TRUE;
-            }
-            break;
-        case WM_CLOSE:
-            EndDialog(hWnd, 0);
-            return TRUE;
-    }
-    return FALSE;
-}
-
 int
 APIENTRY
 _tWinMain(HINSTANCE hInstance,
@@ -117,6 +94,16 @@ _tWinMain(HINSTANCE hInstance,
     s_info.cbSize = sizeof( NONCLIENTMETRICS );
 
     InitCommonControls();
+
+    switch (GetUserDefaultUILanguage())
+    {
+        case MAKELANGID(LANG_HEBREW, SUBLANG_DEFAULT):
+            SetProcessDefaultLayout(LAYOUT_RTL);
+            break;
+
+        default:
+            break;
+    }
 
     win_first = wout_first = FALSE;
 
@@ -444,6 +431,8 @@ WndProc(HWND hWnd,
     HFONT font;
     HFONT oldfont;
     long long slid_samp = 0;
+    WCHAR szAppName[100];
+    HICON hIcon;
 
     /* Checking for global pointers to buffer and io audio devices */
     if ((!AUD_IN) || (!AUD_OUT) || (!AUD_BUF))
@@ -458,7 +447,7 @@ WndProc(HWND hWnd,
             /* Creating the wave bar */
             if (!InitInstance_wave(hWnd, hInst, SW_SHOWNORMAL))
             {
-                MessageBox(0, TEXT("CreateWindow() Error!"), TEXT("ERROR"), MB_ICONERROR);
+                MessageBox(0, TEXT("InitInstance_wave() Error!"), TEXT("ERROR"), MB_ICONERROR);
                 return FALSE;
             }
 
@@ -473,7 +462,7 @@ WndProc(HWND hWnd,
                                           BUTTONS_W,
                                           BUTTONS_H,
                                           hWnd,
-                                          (HMENU)i,
+                                          (HMENU)UlongToPtr(i),
                                           hInst,
                                           0);
                 if (!buttons[i])
@@ -608,8 +597,10 @@ WndProc(HWND hWnd,
                     break;
 
                 case ID_ABOUT:
-                    DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, AboutDlgProc);
-                    return TRUE;
+                    LoadStringW(hInst, IDS_APP_TITLE, szAppName, _countof(szAppName));
+                    hIcon = LoadIconW(hInst, MAKEINTRESOURCEW(IDI_REACTOS_SNDREC32));
+                    ShellAboutW(hWnd, szAppName, L"\0", hIcon);
+                    DestroyIcon(hIcon);
                     break;
 
                 case ID_FILE_SAVEAS:
@@ -809,7 +800,7 @@ WndProc(HWND hWnd,
             ExtTextOut(hdc,
                        STRPOS_X,
                        STRPOS_Y,
-                       ETO_OPAQUE,
+                       0,
                        0,
                        str_tmp,
                        _tcslen(str_tmp),
@@ -833,7 +824,7 @@ WndProc(HWND hWnd,
             ExtTextOut(hdc,
                        STRDUR_X,
                        STRDUR_Y,
-                       ETO_OPAQUE,
+                       0,
                        0,
                        str_tmp,
                        _tcslen(str_tmp),
@@ -847,7 +838,7 @@ WndProc(HWND hWnd,
             ExtTextOut(hdc,
                        STRBUF_X,
                        STRBUF_Y,
-                       ETO_OPAQUE,
+                       0,
                        0,
                        str_tmp,
                        _tcslen(str_tmp),
@@ -863,7 +854,7 @@ WndProc(HWND hWnd,
             ExtTextOut(hdc,
                        STRFMT_X,
                        STRFMT_Y,
-                       ETO_OPAQUE,
+                       0,
                        0,
                        str_tmp,
                        _tcslen(str_tmp),
@@ -877,7 +868,7 @@ WndProc(HWND hWnd,
             ExtTextOut(hdc,
                        STRCHAN_X,
                        STRCHAN_Y,
-                       ETO_OPAQUE,
+                       0,
                        0,
                        str_tmp,
                        _tcslen(str_tmp),

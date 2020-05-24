@@ -217,18 +217,18 @@ PspSetPrimaryToken(IN PEPROCESS Process,
                    IN PACCESS_TOKEN Token OPTIONAL)
 {
     KPROCESSOR_MODE PreviousMode = ExGetPreviousMode();
-    BOOLEAN IsChild;
+    BOOLEAN IsChildOrSibling;
     PACCESS_TOKEN NewToken = Token;
     NTSTATUS Status, AccessStatus;
     BOOLEAN Result, SdAllocated;
     PSECURITY_DESCRIPTOR SecurityDescriptor = NULL;
     SECURITY_SUBJECT_CONTEXT SubjectContext;
+
     PSTRACE(PS_SECURITY_DEBUG, "Process: %p Token: %p\n", Process, Token);
 
-    /* Make sure we got a handle */
-    if (TokenHandle)
+    /* Reference the token by handle if we don't already have a token object */
+    if (!Token)
     {
-        /* Reference it */
         Status = ObReferenceObjectByHandle(TokenHandle,
                                            TOKEN_ASSIGN_PRIMARY,
                                            SeTokenObjectType,
@@ -238,24 +238,38 @@ PspSetPrimaryToken(IN PEPROCESS Process,
         if (!NT_SUCCESS(Status)) return Status;
     }
 
-    /* Check if this is a child */
-    Status = SeIsTokenChild(NewToken, &IsChild);
+    /*
+     * Check whether this token is a child or sibling of the current process token.
+     * NOTE: On Windows Vista+ both of these checks (together with extra steps)
+     * are now performed by a new SeIsTokenAssignableToProcess() helper.
+     */
+    Status = SeIsTokenChild(NewToken, &IsChildOrSibling);
     if (!NT_SUCCESS(Status))
     {
         /* Failed, dereference */
-        if (TokenHandle) ObDereferenceObject(NewToken);
+        if (!Token) ObDereferenceObject(NewToken);
         return Status;
+    }
+    if (!IsChildOrSibling)
+    {
+        Status = SeIsTokenSibling(NewToken, &IsChildOrSibling);
+        if (!NT_SUCCESS(Status))
+        {
+            /* Failed, dereference */
+            if (!Token) ObDereferenceObject(NewToken);
+            return Status;
+        }
     }
 
     /* Check if this was an independent token */
-    if (!IsChild)
+    if (!IsChildOrSibling)
     {
         /* Make sure we have the privilege to assign a new one */
         if (!SeSinglePrivilegeCheck(SeAssignPrimaryTokenPrivilege,
                                     PreviousMode))
         {
             /* Failed, dereference */
-            if (TokenHandle) ObDereferenceObject(NewToken);
+            if (!Token) ObDereferenceObject(NewToken);
             return STATUS_PRIVILEGE_NOT_HELD;
         }
     }
@@ -311,10 +325,18 @@ PspSetPrimaryToken(IN PEPROCESS Process,
                                        STANDARD_RIGHTS_ALL |
                                        PROCESS_SET_QUOTA);
         }
+
+        /*
+         * In case LUID device maps are enable, we may not be using
+         * system device map for this process, but a logon LUID based
+         * device map. Because we change primary token, this usage is
+         * no longer valid, so dereference the process device map
+         */
+        if (ObIsLUIDDeviceMapsEnabled()) ObDereferenceDeviceMap(Process);
     }
 
     /* Dereference the token */
-    if (TokenHandle) ObDereferenceObject(NewToken);
+    if (!Token) ObDereferenceObject(NewToken);
     return Status;
 }
 
@@ -593,6 +615,8 @@ PsImpersonateClient(IN PETHREAD Thread,
 {
     PPS_IMPERSONATION_INFORMATION Impersonation, OldData;
     PTOKEN OldToken = NULL;
+    PEJOB Job;
+
     PAGED_CODE();
     PSTRACE(PS_SECURITY_DEBUG, "Thread: %p, Token: %p\n", Thread, Token);
 
@@ -646,8 +670,32 @@ PsImpersonateClient(IN PETHREAD Thread,
             }
         }
 
-        /* Check if this is a job, which we don't support yet */
-        if (Thread->ThreadsProcess->Job) ASSERT(FALSE);
+        /* FIXME: If the process token can't impersonate, we need to make a copy instead */
+
+        /* Check if this is a job */
+        Job = Thread->ThreadsProcess->Job;
+        if (Job != NULL)
+        {
+            /* No admin allowed in this job */
+            if ((Job->SecurityLimitFlags & JOB_OBJECT_SECURITY_NO_ADMIN) &&
+                SeTokenIsAdmin(Token))
+            {
+                return STATUS_ACCESS_DENIED;
+            }
+
+            /* No restricted tokens allowed in this job */
+            if ((Job->SecurityLimitFlags & JOB_OBJECT_SECURITY_RESTRICTED_TOKEN) &&
+                SeTokenIsRestricted(Token))
+            {
+                return STATUS_ACCESS_DENIED;
+            }
+
+            /* We don't support job filters yet */
+            if (Job->Filter != NULL)
+            {
+                ASSERT(Job->Filter == NULL);
+            }
+        }
 
         /* Lock thread security */
         PspLockThreadSecurityExclusive(Thread);
@@ -691,11 +739,13 @@ NTAPI
 PsReferenceEffectiveToken(IN PETHREAD Thread,
                           OUT IN PTOKEN_TYPE TokenType,
                           OUT PBOOLEAN EffectiveOnly,
-                          OUT PSECURITY_IMPERSONATION_LEVEL Level)
+                          OUT PSECURITY_IMPERSONATION_LEVEL ImpersonationLevel)
 {
     PEPROCESS Process;
     PACCESS_TOKEN Token = NULL;
+
     PAGED_CODE();
+
     PSTRACE(PS_SECURITY_DEBUG,
             "Thread: %p, TokenType: %p\n", Thread, TokenType);
 
@@ -716,7 +766,7 @@ PsReferenceEffectiveToken(IN PETHREAD Thread,
             /* Return data to caller */
             *TokenType = TokenImpersonation;
             *EffectiveOnly = Thread->ImpersonationInfo->EffectiveOnly;
-            *Level = Thread->ImpersonationInfo->ImpersonationLevel;
+            *ImpersonationLevel = Thread->ImpersonationInfo->ImpersonationLevel;
 
             /* Unlock the Process */
             PspUnlockProcessSecurityShared(Process);
@@ -746,6 +796,7 @@ PsReferenceEffectiveToken(IN PETHREAD Thread,
     /* Return the token */
     *TokenType = TokenPrimary;
     *EffectiveOnly = FALSE;
+    // NOTE: ImpersonationLevel is left untouched on purpose!
     return Token;
 }
 

@@ -1536,9 +1536,9 @@ SmpInitializeKnownDllsInternal(IN PUNICODE_STRING Directory,
             /* Checksum failed, so don't even try going further -- kill SMSS */
             RtlInitUnicodeString(&ErrorResponse,
                                  L"Verification of a KnownDLL failed.");
-            ErrorParameters[0] = (ULONG)&ErrorResponse;
+            ErrorParameters[0] = (ULONG_PTR)&ErrorResponse;
             ErrorParameters[1] = Status;
-            ErrorParameters[2] = (ULONG)&RegEntry->Value;
+            ErrorParameters[2] = (ULONG_PTR)&RegEntry->Value;
             SmpTerminate(ErrorParameters, 5, RTL_NUMBER_OF(ErrorParameters));
         }
         else if (!(ImageCharacteristics & IMAGE_FILE_DLL))
@@ -1546,9 +1546,9 @@ SmpInitializeKnownDllsInternal(IN PUNICODE_STRING Directory,
             /* An invalid known DLL entry will also kill SMSS */
             RtlInitUnicodeString(&ErrorResponse,
                                  L"Non-DLL file included in KnownDLL list.");
-            ErrorParameters[0] = (ULONG)&ErrorResponse;
+            ErrorParameters[0] = (ULONG_PTR)&ErrorResponse;
             ErrorParameters[1] = STATUS_INVALID_IMPORT_OF_NON_DLL;
-            ErrorParameters[2] = (ULONG)&RegEntry->Value;
+            ErrorParameters[2] = (ULONG_PTR)&RegEntry->Value;
             SmpTerminate(ErrorParameters, 5, RTL_NUMBER_OF(ErrorParameters));
         }
 
@@ -1820,13 +1820,13 @@ SmpCreateDynamicEnvironmentVariables(VOID)
     {
         /* To combine it into a single string */
         swprintf((PWCHAR)PartialInfo->Data + wcslen((PWCHAR)PartialInfo->Data),
-                 L", %S",
-                 PartialInfo2->Data);
+                 L", %s",
+                 (PWCHAR)PartialInfo2->Data);
     }
 
     /* So that we can set this as the PROCESSOR_IDENTIFIER variable */
     RtlInitUnicodeString(&ValueName, L"PROCESSOR_IDENTIFIER");
-    DPRINT("Setting %wZ to %s\n", &ValueName, PartialInfo->Data);
+    DPRINT("Setting %wZ to %S\n", &ValueName, PartialInfo->Data);
     Status = NtSetValueKey(KeyHandle,
                            &ValueName,
                            0,
@@ -2441,7 +2441,7 @@ SmpInit(IN PUNICODE_STRING InitialCommand,
 
     /* Create the SM API Port */
     RtlInitUnicodeString(&PortName, L"\\SmApiPort");
-    InitializeObjectAttributes(&ObjectAttributes, &PortName, 0, NULL, NULL);
+    InitializeObjectAttributes(&ObjectAttributes, &PortName, 0, NULL, SmpApiPortSecurityDescriptor);
     Status = NtCreatePort(&PortHandle,
                           &ObjectAttributes,
                           sizeof(SB_CONNECTION_INFO),

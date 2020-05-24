@@ -4,10 +4,8 @@
  * PURPOSE:         Test for the RegQueryValueW API
  * PROGRAMMER:      Victor Martinez Calvo <victor.martinez@reactos.org>
  */
-#include <apitest.h>
 
-#define WIN32_NO_STATUS
-#include <winreg.h>
+#include "precomp.h"
 
 static DWORD delete_key(HKEY hkey)
 {
@@ -218,7 +216,7 @@ START_TEST(RegQueryValueExW)
     {
         ok(1, "RegSetValueExW failed: %lx, %lx\n", ret, GetLastError());
     }
-    if ((ret = RegSetValueExW(hkey_main, L"LONGSTRING", 0, REG_SZ, (const BYTE *)string22W, (wcslen(string22W)+1) * sizeof(WCHAR))) != ERROR_SUCCESS)
+    if ((ret = RegSetValueExW(hkey_main, L"LONGSTRING", 0, REG_SZ, (const BYTE *)string22W, (lstrlenW(string22W)+1) * sizeof(WCHAR))) != ERROR_SUCCESS)
     {
         ok(1, "RegSetValueExW failed: %lx, %lx\n", ret, GetLastError());
     }

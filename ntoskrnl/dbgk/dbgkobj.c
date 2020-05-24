@@ -558,7 +558,7 @@ DbgkpPostFakeModuleMessages(IN PEPROCESS Process,
                 if (!NT_SUCCESS(Status)) LoadDll->FileHandle = NULL;
 
                 /* Free the name now */
-                ExFreePool(ModuleName.Buffer);
+                RtlFreeUnicodeString(&ModuleName);
             }
 
             /* Send the fake module load message */
@@ -775,7 +775,7 @@ DbgkpPostFakeThreadMessages(IN PEPROCESS Process,
     {
         /* Dereference and fail */
         if (pFirstThread) ObDereferenceObject(pFirstThread);
-        if (pLastThread) ObDereferenceObject(pLastThread);
+        ObDereferenceObject(pLastThread);
         return Status;
     }
 
@@ -1492,8 +1492,8 @@ DbgkClearProcessDebugObject(IN PEPROCESS Process,
     return STATUS_SUCCESS;
 }
 
-VOID
 INIT_FUNCTION
+VOID
 NTAPI
 DbgkInitialize(VOID)
 {

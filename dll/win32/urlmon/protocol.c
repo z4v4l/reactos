@@ -19,6 +19,10 @@
 
 #include "urlmon_main.h"
 
+#include "wine/debug.h"
+
+WINE_DEFAULT_DEBUG_CHANNEL(urlmon);
+
 static inline HRESULT report_progress(Protocol *protocol, ULONG status_code, LPCWSTR status_text)
 {
     return IInternetProtocolSink_ReportProgress(protocol->protocol_sink, status_code, status_text);
@@ -303,7 +307,7 @@ HINTERNET get_internet_session(IInternetBindInfo *bind_info)
 void update_user_agent(WCHAR *user_agent)
 {
     if(internet_session)
-        InternetSetOptionW(internet_session, INTERNET_OPTION_USER_AGENT, user_agent, strlenW(user_agent));
+        InternetSetOptionW(internet_session, INTERNET_OPTION_USER_AGENT, user_agent, lstrlenW(user_agent));
 }
 
 HRESULT protocol_start(Protocol *protocol, IInternetProtocol *prot, IUri *uri,

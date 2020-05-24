@@ -93,8 +93,8 @@ PLOADER_PARAMETER_BLOCK IopLoaderBlock;
 
 /* INIT FUNCTIONS ************************************************************/
 
-VOID
 INIT_FUNCTION
+VOID
 NTAPI
 IopInitLookasideLists(VOID)
 {
@@ -240,8 +240,8 @@ IopInitLookasideLists(VOID)
     }
 }
 
-BOOLEAN
 INIT_FUNCTION
+BOOLEAN
 NTAPI
 IopCreateObjectTypes(VOID)
 {
@@ -317,7 +317,7 @@ IopCreateObjectTypes(VOID)
     ObjectTypeInitializer.CloseProcedure = IopCloseFile;
     ObjectTypeInitializer.DeleteProcedure = IopDeleteFile;
     ObjectTypeInitializer.SecurityProcedure = IopGetSetSecurityObject;
-    ObjectTypeInitializer.QueryNameProcedure = IopQueryNameFile;
+    ObjectTypeInitializer.QueryNameProcedure = IopQueryName;
     ObjectTypeInitializer.ParseProcedure = IopParseFile;
     ObjectTypeInitializer.UseDefaultObject = FALSE;
     if (!NT_SUCCESS(ObCreateObjectType(&Name,
@@ -329,8 +329,8 @@ IopCreateObjectTypes(VOID)
     return TRUE;
 }
 
-BOOLEAN
 INIT_FUNCTION
+BOOLEAN
 NTAPI
 IopCreateRootDirectories(VOID)
 {
@@ -394,8 +394,8 @@ IopCreateRootDirectories(VOID)
     return TRUE;
 }
 
-BOOLEAN
 INIT_FUNCTION
+BOOLEAN
 NTAPI
 IopMarkBootPartition(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
 {
@@ -464,8 +464,8 @@ IopMarkBootPartition(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
     return TRUE;
 }
 
-BOOLEAN
 INIT_FUNCTION
+BOOLEAN
 NTAPI
 IoInitSystem(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
 {
@@ -501,6 +501,13 @@ IoInitSystem(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
     KeInitializeSpinLock(&DriverBootReinitListLock);
     KeInitializeSpinLock(&ShutdownListLock);
     KeInitializeSpinLock(&IopLogListLock);
+
+    /* Initialize the reserve IRP */
+    if (!IopInitializeReserveIrp(&IopReserveIrpAllocator))
+    {
+        DPRINT1("IopInitializeReserveIrp failed!\n");
+        return FALSE;
+    }
 
     /* Initialize Timer List Lock */
     KeInitializeSpinLock(&IopTimerLock);
@@ -577,7 +584,7 @@ IoInitSystem(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
     /* Initialize PnP root relations */
     IopEnumerateDevice(IopRootDeviceNode->PhysicalDeviceObject);
 
-#ifndef _WINKD_
+#if !defined(_WINKD_) && defined(KDBG)
     /* Read KDB Data */
     KdbInit();
 
@@ -642,6 +649,14 @@ IoInitSystem(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
 
     /* Return success */
     return TRUE;
+}
+
+BOOLEAN
+NTAPI
+IoInitializeCrashDump(IN HANDLE PageFileHandle)
+{
+    UNIMPLEMENTED;
+    return FALSE;
 }
 
 /* EOF */

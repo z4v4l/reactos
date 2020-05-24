@@ -35,7 +35,7 @@ typedef struct _EXPLORER_INFO
     ULONG Padding[PADDING_SIZE];
 } EXPLORER_INFO, *PEXPLORER_INFO;
 
-UINT (WINAPI *SHExplorerParseCmdLine)(_Out_ PEXPLORER_INFO Info);
+UINT_PTR (WINAPI *SHExplorerParseCmdLine)(_Out_ PEXPLORER_INFO Info);
 
 #define PIDL_IS_UNTOUCHED -1
 #define PIDL_IS_NULL -2
@@ -45,9 +45,41 @@ UINT (WINAPI *SHExplorerParseCmdLine)(_Out_ PEXPLORER_INFO Info);
 
 #define InvalidPointer ((PVOID)0x5555555555555555ULL)
 
+DWORD ReplaceSubstr(
+_Out_ PWCHAR OutputStr,
+_In_ DWORD OutputLen,
+_In_ PCWSTR InputStr,
+_In_ PCWSTR ReplaceStr,
+_In_ PCWSTR ReplaceWith)
+{
+    DWORD result = 0;
+    PCWSTR pos;
+    PCWSTR pwc;
+
+    if (!OutputLen)
+        return result;
+
+    OutputStr[0] = 0;
+    pos = InputStr;
+    pwc = wcsstr(pos, ReplaceStr);
+    while (pwc)
+    {
+        if (StringCchCatNW(OutputStr, OutputLen, pos, pwc - pos) == STRSAFE_E_INSUFFICIENT_BUFFER)
+            break;
+        if (StringCchCatW(OutputStr, OutputLen, ReplaceWith) == STRSAFE_E_INSUFFICIENT_BUFFER)
+            break;
+        result++;
+        pos = pwc + wcslen(ReplaceStr);
+        pwc = wcsstr(pos, ReplaceStr);
+    }
+    StringCchCatW(OutputStr, OutputLen, pos);
+    return result;
+}
+
 static
 VOID
 TestCommandLine(
+_In_ ULONG TestLine,
 _In_ INT ExpectedRet,
 _In_ INT ExpectedCsidl,
 _In_ DWORD ExpectedFlags,
@@ -56,7 +88,7 @@ _In_ PCWSTR PidlPath,
 _Out_opt_ PUINT PWriteEnd)
 {
     EXPLORER_INFO Info;
-    UINT Ret;
+    UINT_PTR Ret;
     ULONG i;
     PDWORD InfoWords = (PDWORD) &Info;
 
@@ -66,37 +98,64 @@ _Out_opt_ PUINT PWriteEnd)
 
     // Special case for empty cmdline: Ret is the PIDL for the selected folder.
     if (ExpectedRet == -1)
-        ok((LPITEMIDLIST) Ret == Info.pidl, "Ret = %x, expected %p\n", Ret, Info.pidl);
+        ok((LPITEMIDLIST) Ret == Info.pidl, "Line %lu: Ret = %x, expected %p\n", TestLine, Ret, Info.pidl);
     else
-        ok(Ret == ExpectedRet, "Ret = %x, expected %p\n", Ret, (PVOID) ExpectedRet);
+        ok(Ret == ExpectedRet, "Line %lu: Ret = %x, expected %08x\n", TestLine, Ret, ExpectedRet);
 
     if (ExpectedFileName == NULL)
-        ok(Info.FileName == InvalidPointer, "FileName = %p\n", Info.FileName);
+        ok(Info.FileName == InvalidPointer, "Line %lu: FileName = %p\n", TestLine, Info.FileName);
     else
     {
-        ok(Info.FileName != NULL && Info.FileName != InvalidPointer, "FileName = %p\n", Info.FileName);
+        ok(Info.FileName != NULL && Info.FileName != InvalidPointer, "Line %lu: FileName = %p\n", TestLine, Info.FileName);
         if (Info.FileName != NULL && Info.FileName != InvalidPointer)
         {
-            ok(!wcscmp(Info.FileName, ExpectedFileName), "FileName = %ls, expected %ls\n", Info.FileName, ExpectedFileName);
+            ok(!wcscmp(Info.FileName, ExpectedFileName), "Line %lu: FileName = %ls, expected %ls\n", TestLine, Info.FileName, ExpectedFileName);
             LocalFree(Info.FileName);
         }
     }
 
-    ok(Info.dwFlags == ExpectedFlags, "dwFlags = %08lx, expected %08lx\n", Info.dwFlags, ExpectedFlags);
+    ok(Info.dwFlags == ExpectedFlags, "Line %lu: dwFlags = %08lx, expected %08lx\n", TestLine, Info.dwFlags, ExpectedFlags);
 
     if (ExpectedCsidl == PIDL_IS_UNTOUCHED)
-        ok(Info.pidl == InvalidPointer, "pidl = %p\n", Info.pidl);
+        ok(Info.pidl == InvalidPointer, "Line %lu: pidl = %p\n", TestLine, Info.pidl);
     else if (ExpectedCsidl == PIDL_IS_NULL)
-        ok(Info.pidl == NULL, "pidl = %p\n", Info.pidl);
+        ok(Info.pidl == NULL, "Line %lu: pidl = %p\n", TestLine, Info.pidl);
     else
     {
         PIDLIST_ABSOLUTE ExpectedPidl;
         HRESULT hr;
 
-        ok(Info.pidl != NULL, "pidl = %p\n", Info.pidl);
+        ok(Info.pidl != NULL, "Line %lu: pidl = %p\n", TestLine, Info.pidl);
         if (Info.pidl != NULL && Info.pidl != InvalidPointer)
         {
             WCHAR pidlPathName[MAX_PATH] = L"";
+            WCHAR pidlPathTest[MAX_PATH] = L"";
+            WCHAR rootDir[MAX_PATH] = L"";
+            WCHAR curDir[MAX_PATH] = L"";
+            WCHAR replaceName[MAX_PATH];
+
+            GetFullPathNameW(L"\\", _countof(rootDir), rootDir, NULL);
+
+            GetCurrentDirectoryW(_countof(curDir), curDir);
+            if (wcslen(curDir) != 0 && curDir[wcslen(curDir) - 1] != L'\\')
+                StringCchCatW(curDir, _countof(curDir), L"\\");
+
+            if (PidlPath)
+            {
+                StringCchCopyW(pidlPathTest, _countof(pidlPathTest), PidlPath);
+
+                if (wcsstr(pidlPathTest, L"::ROOT::") != NULL && wcslen(rootDir) > 0)
+                {
+                    if (ReplaceSubstr(replaceName, _countof(replaceName), pidlPathTest, L"::ROOT::", rootDir))
+                        StringCchCopyW(pidlPathTest, _countof(pidlPathTest), replaceName);
+                }
+
+                if (wcsstr(pidlPathTest, L"::CURDIR::") != NULL && wcslen(curDir) > 0)
+                {
+                    if (ReplaceSubstr(replaceName, _countof(replaceName), pidlPathTest, L"::CURDIR::", curDir))
+                        StringCchCopyW(pidlPathTest, _countof(pidlPathTest), replaceName);
+                }
+            }
 
             if (Info.pidl != NULL && Info.pidl != (LPITEMIDLIST) 0x55555555)
             {
@@ -105,35 +164,35 @@ _Out_opt_ PUINT PWriteEnd)
 
             if (ExpectedCsidl == PIDL_PATH_EQUALS_PATH)
             {
-                ok(wcsicmp(pidlPathName, PidlPath) == 0, "Path from pidl does not match; pidlPathName=%S\n", pidlPathName);
+                ok(wcsicmp(pidlPathName, pidlPathTest) == 0, "Line %lu: Path from pidl does not match; pidlPathName=%S\n", TestLine, pidlPathName);
             }
             else if (ExpectedCsidl == PIDL_IS_EMPTY)
             {
-                ok(wcslen(pidlPathName) == 0, "Unexpected non-empty path from pidl; pidlPathName=%S\n", pidlPathName);
+                ok(wcslen(pidlPathName) == 0, "Line %lu: Unexpected non-empty path from pidl; pidlPathName=%S\n", TestLine, pidlPathName);
             }
             else
             {
                 if (ExpectedCsidl == PIDL_IS_PATH)
                 {
-                    ExpectedPidl = SHSimpleIDListFromPath(PidlPath);
+                    ExpectedPidl = SHSimpleIDListFromPath(pidlPathTest);
                     hr = ExpectedPidl == NULL ? E_FAIL : S_OK;
-                    ok(ExpectedPidl != NULL, "SHSimpleIDListFromPath(%S) failed. pidlPathName=%S\n", PidlPath, pidlPathName);
+                    ok(ExpectedPidl != NULL, "Line %lu: SHSimpleIDListFromPath(%S) failed. pidlPathName=%S\n", TestLine, pidlPathTest, pidlPathName);
                     if (SUCCEEDED(hr))
                     {
-                        ok(ILIsEqual(Info.pidl, ExpectedPidl), "Unexpected pidl value %p; pidlPathName=%S PidlPath=%S\n", Info.pidl, pidlPathName, PidlPath);
+                        ok(ILIsEqual(Info.pidl, ExpectedPidl), "Line %lu: Unexpected pidl value %p; pidlPathName=%S pidlPathTest=%S\n", TestLine, Info.pidl, pidlPathName, pidlPathTest);
                         ILFree(ExpectedPidl);
                     }
                 }
                 else
                 {
                     hr = SHGetFolderLocation(NULL, ExpectedCsidl, NULL, 0, &ExpectedPidl);
-                    ok(hr == S_OK, "SHGetFolderLocation returned %08lx\n", hr);
+                    ok(hr == S_OK, "Line %lu: SHGetFolderLocation returned %08lx\n", TestLine, hr);
                     if (SUCCEEDED(hr))
                     {
                         BOOL eq = ILIsEqual(Info.pidl, ExpectedPidl);
                         ILFree(ExpectedPidl);
 
-                        ok(eq, "Unexpected pidl value %p; pidlPathName=%S CSIDL=%d\n", Info.pidl, pidlPathName, ExpectedCsidl);
+                        ok(eq, "Line %lu: Unexpected pidl value %p; pidlPathName=%S CSIDL=%d\n", TestLine, Info.pidl, pidlPathName, ExpectedCsidl);
                     }
                 }
             }
@@ -157,7 +216,7 @@ _Out_opt_ PUINT PWriteEnd)
         case 0x40: // guidInproc (4/4)
             break;
         default:
-            ok(InfoWords[i] == 0x55555555, "Word 0x%02lx has been set to 0x%08lx\n", i * 4, InfoWords[i]);
+            ok(InfoWords[i] == 0x55555555, "Line %lu: Word 0x%02lx has been set to 0x%08lx\n", TestLine, i * 4, InfoWords[i]);
         }
     }
 
@@ -203,12 +262,13 @@ START_TEST(SHExplorerParseCmdLine)
         { __LINE__, L"::{645ff040-5081-101b-9f08-00aa002f954e}", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"::{645ff040-5081-101b-9f08-00aa002f954e}" },
         { __LINE__, L"/select,::{450d8fba-ad25-11d0-98a8-0800361b1103}", TRUE, PIDL_IS_PATH, 0x00000240, NULL, L"::{450d8fba-ad25-11d0-98a8-0800361b1103}" },
         { __LINE__, L"=", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"::{20d04fe0-3aea-1069-a2d8-08002b30309d}" },
-        { __LINE__, L".", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\Documents and Settings\\gigaherz\\Desktop" },
-        { __LINE__, L"..", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\Documents and Settings\\gigaherz" },
+//        { __LINE__, L".", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\Documents and Settings\\gigaherz\\Desktop" },
+//        { __LINE__, L"..", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\Documents and Settings\\gigaherz" },
         { __LINE__, L"wrongpath", TRUE, PIDL_IS_NULL, 0x02000000, L"wrongpath"},
         { __LINE__, L"%wrongdir%", TRUE, PIDL_IS_NULL, 0x02000000, L"%wrongdir%"},
         { __LINE__, L"%programfiles#", TRUE, PIDL_IS_NULL, 0x02000000, L"%programfiles#"},
         { __LINE__, L",", TRUE, PIDL_IS_EMPTY, 0x00000200},
+        { __LINE__, L"\\", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"::ROOT::" }, // disk letter depends on current directory
         { __LINE__, L"c:\\", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\" },
         { __LINE__, L"c:", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\" },
         { __LINE__, L"c", TRUE, PIDL_IS_NULL, 0x02000000, L"c"},
@@ -216,9 +276,12 @@ START_TEST(SHExplorerParseCmdLine)
         { __LINE__, L"c:\\Program Files\\", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\Program Files" },
         { __LINE__, L"c:\\Program Files/", TRUE, PIDL_IS_NULL, 0x02000000, L"c:\\Program Files/"},
         { __LINE__, L"c:/Program Files/", TRUE, PIDL_IS_NULL, 0x02000000, L"c:/Program Files/"},
-        { __LINE__, L"fonts", TRUE, PIDL_IS_NULL, 0x02000000, L"fonts" },
-        { __LINE__, L"winsxs", TRUE, PIDL_IS_NULL, 0x02000000, L"winsxs" },
-        { __LINE__, L"system32", TRUE, PIDL_IS_NULL, 0x02000000, L"system32" },
+        { __LINE__, L"fonts", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"::CURDIR::fonts" }, // this would not fail if we are in Windows directory
+        { __LINE__, L"winsxs", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"::CURDIR::winsxs" },
+        { __LINE__, L"system32", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"::CURDIR::system32" },
+        { __LINE__, L"drivers", TRUE, PIDL_IS_NULL, 0x02000000, L"drivers" }, // this would fail since we are not in system32 directory
+        { __LINE__, L"spool", TRUE, PIDL_IS_NULL, 0x02000000, L"spool" },
+ //       { __LINE__, L"wbem", TRUE, PIDL_IS_NULL, 0x02000000, L"wbem" },
         { __LINE__, TEST_PATHW, TRUE, PIDL_IS_PATH, 0x00000200, NULL, TEST_PATHW },
         { __LINE__, L"\"c:\\\"\"program files\"", TRUE, PIDL_IS_NULL, 0x02000000, L"c:\\\"program files"},
         { __LINE__, L"\"c:\\\"program files", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\Program Files" },
@@ -242,8 +305,8 @@ START_TEST(SHExplorerParseCmdLine)
         { __LINE__, L"/root,c:\\,Program Files", TRUE, PIDL_IS_NULL, 0x02000000, L"Program Files"},
         { __LINE__, L"/root,\"c:\\\"", TRUE, PIDL_PATH_EQUALS_PATH, 0x00000000, NULL, L"c:\\" },
         { __LINE__, L"c:\\Program Files,/root,c:\\", TRUE, PIDL_PATH_EQUALS_PATH, 0x00000200, NULL, L"c:\\" },
-        { __LINE__, L"a:\\,/root,c:\\", TRUE, PIDL_PATH_EQUALS_PATH, 0x00000200, NULL, L"c:\\" },
-        { __LINE__, L"a:\\,/root,c", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"A:\\" },
+//        { __LINE__, L"a:\\,/root,c:\\", TRUE, PIDL_PATH_EQUALS_PATH, 0x00000200, NULL, L"c:\\" },
+//        { __LINE__, L"a:\\,/root,c", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"A:\\" },
         { __LINE__, L"c:\\,/root,c", TRUE, PIDL_IS_PATH, 0x00000200, NULL, L"C:\\" },
         { __LINE__, L"/select", TRUE, CSIDL_MYDOCUMENTS, 0x00000040},
         { __LINE__, L"/select,", TRUE, CSIDL_DRIVES, 0x00000240 },
@@ -255,12 +318,12 @@ START_TEST(SHExplorerParseCmdLine)
         { __LINE__, L"/select,c:\\Program Files,c:\\Documents and settings", TRUE, PIDL_IS_PATH, 0x00000240, NULL, L"C:\\Documents and Settings" },
         { __LINE__, L"c:\\,/select," TEST_FILENAMEW, TRUE, PIDL_IS_NULL, 0x02000240, TEST_FILENAMEW },
         { __LINE__, L"c:\\,/select," TEST_PATHW, TRUE, PIDL_IS_PATH, 0x00000240, NULL, TEST_PATHW },
-        { __LINE__, L"a:\\,/select," TEST_PATHW, TRUE, PIDL_IS_PATH, 0x00000240, NULL, TEST_PATHW },
+//        { __LINE__, L"a:\\,/select," TEST_PATHW, TRUE, PIDL_IS_PATH, 0x00000240, NULL, TEST_PATHW },
         { __LINE__, L"z:\\,/select," TEST_PATHW, TRUE, PIDL_IS_PATH, 0x02000240, L"z:\\", TEST_PATHW },
         { __LINE__, L"select,c:\\ ", TRUE, PIDL_IS_PATH, 0x02000200, L"select", L"C:\\" },
         { __LINE__, L"/select c:\\ ", TRUE, PIDL_IS_NULL, 0x02000000, L"/select c:\\"},
-        { __LINE__, L"a:\\,/select,c:\\", TRUE, PIDL_IS_PATH, 0x00000240, NULL, L"C:\\" },
-        { __LINE__, L"a:\\,/select,c", TRUE, PIDL_IS_NULL, 0x02000240, L"c"},
+//        { __LINE__, L"a:\\,/select,c:\\", TRUE, PIDL_IS_PATH, 0x00000240, NULL, L"C:\\" },
+        { __LINE__, L"a:\\,/select,c", TRUE, PIDL_IS_NULL, 0x02000040, L"c"},
         { __LINE__, L"c:\\,/select,c", TRUE, PIDL_IS_NULL, 0x02000240, L"c"},
         { __LINE__, L"/e", TRUE, CSIDL_MYDOCUMENTS, 0x00000008},
         { __LINE__, L"/e,", TRUE, CSIDL_DRIVES, 0x00000208 },
@@ -345,9 +408,10 @@ START_TEST(SHExplorerParseCmdLine)
     int i;
     UINT maxWrite = 0;
     FILE * ff;
+    WCHAR winDir[MAX_PATH];
 
     HMODULE browseui = LoadLibraryA("browseui.dll");
-    SHExplorerParseCmdLine = (UINT (__stdcall *)(PEXPLORER_INFO))GetProcAddress(browseui, MAKEINTRESOURCEA(107));
+    SHExplorerParseCmdLine = (UINT_PTR (__stdcall *)(PEXPLORER_INFO))GetProcAddress(browseui, MAKEINTRESOURCEA(107));
     if (!SHExplorerParseCmdLine)
     {
         skip("SHExplorerParseCmdLine not found, NT 6.0?\n");
@@ -360,6 +424,9 @@ START_TEST(SHExplorerParseCmdLine)
     ff = fopen(TEST_PATHA, "wb");
     fclose(ff);
 
+    GetWindowsDirectoryW(winDir, _countof(winDir));
+    SetCurrentDirectoryW(winDir);
+
     for (i = 0; i < TestCount; i++)
     {
         UINT cWrite;
@@ -367,7 +434,8 @@ START_TEST(SHExplorerParseCmdLine)
         wcscpy(CommandLine, L"browseui_apitest.exe ");
         wcscat(CommandLine, Tests[i].CommandLine);
         trace("Command line (%d): %ls\n", Tests[i].TestLine, CommandLine);
-        TestCommandLine(Tests[i].ExpectedRet,
+        TestCommandLine(Tests[i].TestLine,
+                        Tests[i].ExpectedRet,
                         Tests[i].ExpectedCsidl,
                         Tests[i].ExpectedFlags,
                         Tests[i].ExpectedFileName,

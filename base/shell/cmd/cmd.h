@@ -63,9 +63,6 @@ INT CommandAlias (LPTSTR);
 /* Prototypes for ASSOC.C */
 INT CommandAssoc (LPTSTR);
 
-/* Prototypes for ATTRIB.C */
-INT CommandAttrib (LPTSTR);
-
 /* Prototypes for BEEP.C */
 INT cmd_beep (LPTSTR);
 
@@ -83,7 +80,15 @@ INT ConvertULargeInteger(ULONGLONG num, LPTSTR des, UINT len, BOOL bPutSeparator
 HANDLE RunFile(DWORD, LPTSTR, LPTSTR, LPTSTR, INT);
 INT ParseCommandLine(LPTSTR);
 struct _PARSED_COMMAND;
-INT ExecuteCommand(struct _PARSED_COMMAND *Cmd);
+
+INT
+ExecuteCommand(
+    IN struct _PARSED_COMMAND *Cmd);
+
+INT
+ExecuteCommandWithEcho(
+    IN struct _PARSED_COMMAND *Cmd);
+
 LPCTSTR GetEnvVarOrSpecial ( LPCTSTR varName );
 VOID AddBreakHandler (VOID);
 VOID RemoveBreakHandler (VOID);
@@ -168,7 +173,11 @@ INT  CommandEchoerr (LPTSTR);
 INT  CommandEchoserr (LPTSTR);
 
 /* Prototypes for ERROR.C */
-VOID ErrorMessage (DWORD, LPTSTR, ...);
+VOID
+ErrorMessage(
+    IN DWORD dwErrorCode,
+    IN LPTSTR szFormat OPTIONAL,
+    ...);
 
 VOID error_no_pipe (VOID);
 VOID error_bad_command (LPTSTR);
@@ -214,12 +223,12 @@ INT cmd_goto (LPTSTR);
 /* Prototypes for HISTORY.C */
 #ifdef FEATURE_HISTORY
 LPCTSTR PeekHistory(INT);
-VOID History (INT, LPTSTR);/*add entries browse history*/
+VOID History(INT, LPTSTR);/*add entries browse history*/
 VOID History_move_to_bottom(VOID);/*F3*/
 VOID InitHistory(VOID);
 VOID CleanHistory(VOID);
 VOID History_del_current_entry(LPTSTR str);/*CTRL-D*/
-INT CommandHistory (LPTSTR param);
+INT CommandHistory(LPTSTR param);
 #endif
 
 /* Prototypes for IF.C */
@@ -239,9 +248,6 @@ INT  cmd_rmdir (LPTSTR);
 INT  CommandExit (LPTSTR);
 INT  CommandRem (LPTSTR);
 INT  CommandShowCommands (LPTSTR);
-
-/* Prototypes for LABEL.C */
-INT cmd_label (LPTSTR);
 
 /* Prototypes for LOCALE.C */
 extern TCHAR cDateSeparator;

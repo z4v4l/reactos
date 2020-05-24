@@ -20,9 +20,28 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "precomp.h"
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
 
-#include <secext.h>
+#include "windef.h"
+#include "winbase.h"
+#include "winerror.h"
+
+#include "rpc.h"
+#include "rpcndr.h"
+#include "excpt.h"
+
+#include "wine/debug.h"
+#include "wine/exception.h"
+
+#include "rpc_server.h"
+#include "rpc_assoc.h"
+#include "rpc_message.h"
+#include "rpc_defs.h"
+#include "ncastatus.h"
+#include "secext.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(rpc);
 
@@ -680,10 +699,6 @@ static DWORD CALLBACK RPCRT4_server_thread(LPVOID the_arg)
   }
   LeaveCriticalSection(&cps->cs);
 
-  EnterCriticalSection(&listen_cs);
-  CloseHandle(cps->server_thread);
-  cps->server_thread = NULL;
-  LeaveCriticalSection(&listen_cs);
   TRACE("done\n");
   return 0;
 }
@@ -1198,7 +1213,8 @@ RPC_STATUS WINAPI RpcServerUnregisterIf( RPC_IF_HANDLE IfSpec, UUID* MgrTypeUuid
 
   EnterCriticalSection(&server_cs);
   LIST_FOR_EACH_ENTRY(cif, &server_interfaces, RpcServerInterface, entry) {
-    if ((!IfSpec || !memcmp(&If->InterfaceId, &cif->If->InterfaceId, sizeof(RPC_SYNTAX_IDENTIFIER))) &&
+    if (((!IfSpec && !(cif->Flags & RPC_IF_AUTOLISTEN)) ||
+        (IfSpec && !memcmp(&If->InterfaceId, &cif->If->InterfaceId, sizeof(RPC_SYNTAX_IDENTIFIER)))) &&
         UuidEqual(MgrTypeUuid, &cif->MgrTypeUuid, &status)) {
       list_remove(&cif->entry);
       TRACE("unregistering cif %p\n", cif);
@@ -1550,7 +1566,10 @@ RPC_STATUS WINAPI RpcMgmtWaitServerListen( void )
       LIST_FOR_EACH_ENTRY(protseq, &protseqs, RpcServerProtseq, entry)
       {
           if ((wait_thread = protseq->server_thread))
+          {
+              protseq->server_thread = NULL;
               break;
+          }
       }
       LeaveCriticalSection(&server_cs);
       if (!wait_thread)
@@ -1559,6 +1578,7 @@ RPC_STATUS WINAPI RpcMgmtWaitServerListen( void )
       TRACE("waiting for thread %u\n", GetThreadId(wait_thread));
       LeaveCriticalSection(&listen_cs);
       WaitForSingleObject(wait_thread, INFINITE);
+      CloseHandle(wait_thread);
       EnterCriticalSection(&listen_cs);
   }
   if (listen_done_event == event)

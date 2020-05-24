@@ -1,7 +1,12 @@
 
 add_definitions(
+    -DWINETEST_USE_DBGSTR_LONGLONG
     -D_CRT_NONSTDC_NO_DEPRECATE
     -D__msvcrt_ulong=ULONG)
+
+if(GCC AND GCC_VERSION VERSION_GREATER 7)
+    add_compile_flags("-Wno-stringop-truncation")
+endif()
 
 list(APPEND SOURCE
     cpp.c
@@ -17,18 +22,22 @@ list(APPEND SOURCE
     scanf.c
     signal.c
     string.c
-    testlist.c
-    time.c)
+    time.c
+    precomp.h)
 
-add_executable(msvcrt_winetest ${SOURCE})
+add_executable(msvcrt_winetest ${SOURCE} testlist.c)
+
+if(USE_CLANG_CL OR (NOT MSVC))
+    target_compile_options(msvcrt_winetest PRIVATE "-Wno-format")
+endif()
+
 set_module_type(msvcrt_winetest win32cui)
-add_importlibs(msvcrt_winetest msvcrt kernel32)
+add_importlibs(msvcrt_winetest advapi32 msvcrt kernel32)
 
 if(MSVC)
     target_link_libraries(msvcrt_winetest oldnames)
     add_importlibs(msvcrt_winetest ntdll)
-else()
-    add_target_compile_flags(msvcrt_winetest "-Wno-format")
 endif()
 
+add_pch(msvcrt_winetest precomp.h SOURCE)
 add_rostests_file(TARGET msvcrt_winetest)

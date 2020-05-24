@@ -20,17 +20,12 @@
 #include <stdarg.h>
 #include <assert.h>
 
-#define WIN32_NO_STATUS
-#define _INC_WINDOWS
-#define COM_NO_WINDOWS_H
-
 #define COBJMACROS
 
-#include <windef.h>
-#include <winbase.h>
-#include <objbase.h>
-#include <wincodec.h>
-#include <wine/test.h>
+#include "windef.h"
+#include "objbase.h"
+#include "wincodec.h"
+#include "wine/test.h"
 
 static IWICImagingFactory *factory;
 
@@ -467,7 +462,7 @@ static void test_predefined_palette(void)
     ok(hr == E_INVALIDARG, "expected E_INVALIDARG, got %#x\n", hr);
     IWICPalette_Release(palette);
 
-    for (i = 0; i < sizeof(td)/sizeof(td[0]); i++)
+    for (i = 0; i < ARRAY_SIZE(td); i++)
     {
         hr = IWICImagingFactory_CreatePalette(factory, &palette);
         ok(hr == S_OK, "%u: CreatePalette error %#x\n", i, hr);
@@ -607,7 +602,7 @@ static void test_palette_from_bitmap(void)
     ok(hr == S_OK, "GetColorCount error %#x\n", hr);
     ok(count == 2, "expected 2, got %u\n", count);
 
-    /* without trasparent color */
+    /* without transparent color */
     hr = IWICPalette_InitializeFromBitmap(palette, (IWICBitmapSource *)bitmap, 16, FALSE);
     ok(hr == S_OK, "InitializeFromBitmap error %#x\n", hr);
     type = -1;
@@ -624,7 +619,7 @@ static void test_palette_from_bitmap(void)
     ok(ret == count, "expected %u, got %u\n", count, ret);
     ok(color[count - 1] != 0, "expected !0, got %08x\n", color[count - 1]);
 
-    /* with trasparent color */
+    /* with transparent color */
     hr = IWICPalette_InitializeFromBitmap(palette, (IWICBitmapSource *)bitmap, 16, TRUE);
     ok(hr == S_OK, "InitializeFromBitmap error %#x\n", hr);
     type = -1;

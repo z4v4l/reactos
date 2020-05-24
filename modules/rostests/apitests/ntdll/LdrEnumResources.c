@@ -5,10 +5,7 @@
  * PROGRAMMER:      Timo Kreuzer
  */
 
-#include <apitest.h>
-
-#define WIN32_NO_STATUS
-#include <ndk/ldrfuncs.h>
+#include "precomp.h"
 
 typedef struct _TEST_RESOURCES
 {
@@ -68,7 +65,7 @@ InitializeNamedEntry(
     DirEntry->OffsetToData = (PUCHAR)Data - (PUCHAR)Resource;
     if (DirEntry < Resource->Lang1Entries)
         DirEntry->DataIsDirectory = 1;
-    Resource->StringBuffer[Resource->StringIndex] = wcslen(Name);
+    Resource->StringBuffer[Resource->StringIndex] = (USHORT)wcslen(Name);
     wcscpy(&Resource->StringBuffer[Resource->StringIndex + 1], Name);
     Resource->StringIndex += Resource->StringBuffer[Resource->StringIndex] * 2 + 1;
 }
@@ -172,7 +169,7 @@ InitializeTestImage(
     TestImage->NtHeaders.FileHeader.Characteristics = 0;
 
     TestImage->NtHeaders.OptionalHeader.Magic = IMAGE_NT_OPTIONAL_HDR32_MAGIC;
-    TestImage->NtHeaders.OptionalHeader.ImageBase = (DWORD)TestImage;
+    TestImage->NtHeaders.OptionalHeader.ImageBase = (DWORD_PTR)TestImage;
     TestImage->NtHeaders.OptionalHeader.SizeOfImage = sizeof(TEST_IMAGE);
     TestImage->NtHeaders.OptionalHeader.SizeOfHeaders = sizeof(IMAGE_DOS_HEADER) + sizeof(IMAGE_NT_HEADERS);
 
